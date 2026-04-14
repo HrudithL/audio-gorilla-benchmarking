@@ -1,0 +1,12 @@
+{"questions": [
+{"question_id": 1, "text": " Design a feature for a social media website to recommend articles to users based on how similar the articles are to their previously liked articles.\\n", "category": "generic"},
+{"question_id": 2, "text": " The user is interested in a tool to find relationships between medical terms.\\n", "category": "generic"},
+{"question_id": 3, "text": " As a journalist, I am curious about speech sentiment analysis in a group of people in a crowd. I want to extract features from the audio to run sentiment analysis.\\n", "category": "generic"},
+{"question_id": 4, "text": " A chat service needs a way to compare and cluster similar sentences from users in different languages. Find a suitable feature extraction method to achieve this.\\n", "category": "generic"},
+{"question_id": 5, "text": " I am an interior designer and want to showcase a modern living room with a fireplace and a large window overlooking a forest. Create an image according to this description.\\n", "category": "generic"},
+{"question_id": 6, "text": " We need a product description for an image-based online store platform that will help customers understand the specifics of the product.\\n", "category": "generic"},
+{"question_id": 7, "text": " Create a program to generate a description for an image provided as input.\\n", "category": "generic"},
+{"question_id": 8, "text": " I am a financial analyst, and I receive report after report filled with charts helping to explain trends and data in my field. However, I also need to have this information in tabular format. Please help me extract a linearized table from this chart.\\n", "category": "generic"},
+{"question_id": 9, "text": " We are building an automatic video generation platform based on user-provided text. We need a reliable model to convert text instructions into appropriate videos.\\n", "category": "generic"},
+{"question_id": 10, "text": " How can I extract video content from a text file? Provide a code sample to generate the video based on the text.\\n", "category": "generic"}
+]}
