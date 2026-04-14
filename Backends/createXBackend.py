@@ -4,7 +4,9 @@ import copy
 import uuid
 import random
 from typing import Dict, Any
-from fake_data import first_names, last_names, domains, social_media_bios, post_texts, user_count, first_and_last_names
+from fake_data import first_names, last_names, domains, social_media_bios, post_texts, user_count, first_and_last_names, x_conversations
+
+print("Running createXBackend with x_conversations support")
 
 _initial_user_id_map = {}
 _initial_post_id_map = {}
@@ -12,7 +14,8 @@ _initial_dm_conv_id_map = {}
 
 
 def _convert_initial_data_to_uuids(initial_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Converts the initial RAW_DEFAULT_STATE data to use UUIDs for all relevant IDs and adds realism."""
+    """Converts the initial RAW_DEFAULT_STATE data to use UUIDs for all 
+    relevant IDs and adds realism."""
 
     converted_data = copy.deepcopy(initial_data)
 
@@ -165,234 +168,11 @@ def generate_random_iso_timestamp(days_ago_min=0, days_ago_max=365 * 5):
     dt = datetime.datetime.now(datetime.timezone.utc) - time_offset
     return dt.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
-dm_messages = [
-    "Hey, how have you been?",
-    "Did you see that article I sent you?",
-    "What are you up to this weekend?",
-    "Can you help me with something?",
-    "Just wanted to say hi!",
-    "Thinking of you.",
-    "Let's catch up soon.",
-    "Got any recommendations?",
-    "That was hilarious!",
-    "I agree with you.",
-    "Thanks for the help!",
-    "No problem, happy to assist.",
-    "I'll get back to you on that.",
-    "Sounds good!",
-    "See you later!",
-    "Hope you're having a great day.",
-    "I just saw your latest post, amazing!",
-    "Thinking of getting into a new hobby, any suggestions?",
-    "Need to vent for a second...",
-    "Just wanted to share some good news!",
-]
-
 
 RAW_DEFAULT_STATE = {
-    "users": {
-        "usr_alice_smith": {
-            "id": "usr_alice_smith",
-            "username": "alice_smith",
-            "name": "Alice Smith",
-            "email": "alice.smith@hostinger.com",
-            "joined_date": datetime.datetime(
-                2023, 1, 15, 10, 0, 0, tzinfo=datetime.timezone.utc
-            ),
-            "bio": "Tech enthusiast and amateur photographer. Sharing my thoughts on AI and the digital world.",
-            "profile_picture_url": "https://x.com/profiles/alice_smith.jpg",
-            "followers": ["usr_john_doe", "usr_emily_white"],
-            "following": ["usr_john_doe", "usr_bob_johnson"],
-            "liked_posts": ["post_002", "post_005"],
-            "posts": ["post_001", "post_004", "post_006"],
-            "api_usage": {"posts_created": 3, "dms_sent": 2, "profile_views": 15},
-            "is_verified": True,
-        },
-        "usr_john_doe": {
-            "id": "usr_john_doe",
-            "username": "john_doe",
-            "name": "John Doe",
-            "email": "john.doe@hostinger.com",
-            "joined_date": datetime.datetime(
-                2022, 11, 1, 14, 30, 0, tzinfo=datetime.timezone.utc
-            ),
-            "bio": "Software developer and open-source contributor.",
-            "profile_picture_url": "https://x.com/profiles/john_doe.jpg",
-            "followers": ["usr_alice_smith"],
-            "following": ["usr_alice_smith", "usr_emily_white"],
-            "liked_posts": ["post_001", "post_003"],
-            "posts": ["post_002", "post_003"],
-            "api_usage": {"posts_created": 2, "dms_sent": 3, "profile_views": 10},
-            "is_verified": False,
-        },
-        "usr_emily_white": {
-            "id": "usr_emily_white",
-            "username": "emily_white",
-            "name": "Emily White",
-            "email": "emily.white@hostinger.com",
-            "joined_date": datetime.datetime(
-                2024, 3, 20, 9, 0, 0, tzinfo=datetime.timezone.utc
-            ),
-            "bio": "Digital artist exploring new creative frontiers.",
-            "profile_picture_url": "https://x.com/profiles/emily_white.jpg",
-            "followers": ["usr_alice_smith", "usr_john_doe"],
-            "following": [],
-            "liked_posts": [],
-            "posts": ["post_005"],
-            "api_usage": {"posts_created": 1, "dms_sent": 1, "profile_views": 8},
-            "is_verified": False,
-        },
-        "usr_bob_johnson": {
-            "id": "usr_bob_johnson",
-            "username": "bob_johnson",
-            "name": "Bob Johnson",
-            "email": "bob.johnson@hostinger.com",
-            "joined_date": datetime.datetime(
-                2023, 5, 1, 11, 0, 0, tzinfo=datetime.timezone.utc
-            ),
-            "bio": "Musician and foodie.",
-            "profile_picture_url": "https://x.com/profiles/bob_johnson.jpg",
-            "followers": ["usr_alice_smith"],
-            "following": [],
-            "liked_posts": [],
-            "posts": [],
-            "api_usage": {},
-            "is_verified": False,
-        },
-    },
-    "posts": {
-        "post_001": {
-            "id": "post_001",
-            "author_id": "usr_alice_smith",
-            "text": "Excited about the new AI developments!",
-            "created_at": datetime.datetime(
-                2024, 7, 20, 8, 0, 0, tzinfo=datetime.timezone.utc
-            ),
-            "likes": ["usr_john_doe"],
-            "reposts": [],
-            "replies": [],
-            "metrics": {"views": 150, "likes": 1, "reposts": 0, "replies": 0},
-        },
-        "post_002": {
-            "id": "post_002",
-            "author_id": "usr_john_doe",
-            "text": "Just pushed a new update to my GitHub repo. Check it out!",
-            "created_at": datetime.datetime(
-                2024, 7, 21, 10, 0, 0, tzinfo=datetime.timezone.utc
-            ),
-            "likes": ["usr_alice_smith"],
-            "reposts": [],
-            "replies": [],
-            "metrics": {"views": 100, "likes": 1, "reposts": 0, "replies": 0},
-        },
-        "post_003": {
-            "id": "post_003",
-            "author_id": "usr_john_doe",
-            "text": "Having a great time learning about quantum computing. Mind-blowing stuff!",
-            "created_at": datetime.datetime(
-                2024, 7, 22, 15, 30, 0, tzinfo=datetime.timezone.utc
-            ),
-            "likes": ["usr_john_doe"],
-            "reposts": [],
-            "replies": [],
-            "metrics": {"views": 80, "likes": 1, "reposts": 0, "replies": 0},
-        },
-        "post_004": {
-            "id": "post_004",
-            "author_id": "usr_alice_smith",
-            "text": "Exploring new camera lenses. Any recommendations for landscape photography?",
-            "created_at": datetime.datetime(
-                2024, 7, 23, 9, 0, 0, tzinfo=datetime.timezone.utc
-            ),
-            "likes": [],
-            "reposts": [],
-            "replies": [],
-            "metrics": {"views": 70, "likes": 0, "reposts": 0, "replies": 0},
-        },
-        "post_005": {
-            "id": "post_005",
-            "author_id": "usr_emily_white",
-            "text": "New digital art piece in progress! What do you think?",
-            "created_at": datetime.datetime(
-                2024, 7, 24, 11, 45, 0, tzinfo=datetime.timezone.utc
-            ),
-            "likes": ["usr_alice_smith"],
-            "reposts": [],
-            "replies": [],
-            "metrics": {"views": 120, "likes": 1, "reposts": 0, "replies": 0},
-        },
-        "post_006": {
-            "id": "post_006",
-            "author_id": "usr_alice_smith",
-            "text": "Just finished a great book on mindful living. Highly recommend!",
-            "created_at": datetime.datetime(
-                2024, 7, 25, 14, 0, 0, tzinfo=datetime.timezone.utc
-            ),
-            "likes": [],
-            "reposts": [],
-            "replies": [],
-            "metrics": {"views": 60, "likes": 0, "reposts": 0, "replies": 0},
-        },
-    },
-    "direct_messages": {
-        "dm_conv_alice_john": {
-            "id": "dm_conv_alice_john",
-            "participants": ["usr_alice_smith", "usr_john_doe"],
-            "messages": [
-                {
-                    "sender_id": "usr_alice_smith",
-                    "text": "Hey John, did you see the latest tech news?",
-                    "timestamp": (
-                        datetime.datetime.now(datetime.timezone.utc)
-                        - datetime.timedelta(days=2)
-                    ).isoformat(timespec="milliseconds")
-                    + "Z",
-                },
-                {
-                    "sender_id": "usr_john_doe",
-                    "text": "Not yet, Alice! Anything exciting happening?",
-                    "timestamp": (
-                        datetime.datetime.now(datetime.timezone.utc)
-                        - datetime.timedelta(days=2, minutes=5)
-                    ).isoformat(timespec="milliseconds")
-                    + "Z",
-                },
-                {
-                    "sender_id": "usr_alice_smith",
-                    "text": "Just read about a breakthrough in AI ethics!",
-                    "timestamp": (
-                        datetime.datetime.now(datetime.timezone.utc)
-                        - datetime.timedelta(days=1)
-                    ).isoformat(timespec="milliseconds")
-                    + "Z",
-                },
-            ],
-        },
-        "dm_conv_alice_emily": {
-            "id": "dm_conv_alice_emily",
-            "participants": ["usr_alice_smith", "usr_emily_white"],
-            "messages": [
-                {
-                    "sender_id": "usr_alice_smith",
-                    "text": "Loved your new art piece, Emily! Stunning!",
-                    "timestamp": (
-                        datetime.datetime.now(datetime.timezone.utc)
-                        - datetime.timedelta(hours=10)
-                    ).isoformat(timespec="milliseconds")
-                    + "Z",
-                },
-                {
-                    "sender_id": "usr_emily_white",
-                    "text": "Thanks, Alice! Glad you liked it.",
-                    "timestamp": (
-                        datetime.datetime.now(datetime.timezone.utc)
-                        - datetime.timedelta(hours=9)
-                    ).isoformat(timespec="milliseconds")
-                    + "Z",
-                },
-            ],
-        },
-    },
+    "users": {},
+    "posts": {},
+    "direct_messages": {},
 }
 
 
@@ -435,7 +215,7 @@ for i in range(user_count + len(first_and_last_names)):
             days_ago_min=365, days_ago_max=365 * 4
         ),
         "bio": random.choice(social_media_bios),
-        "profile_picture_url": f"[https://x.com/profiles/](https://x.com/profiles/){username}.jpg",
+        "profile_picture_url": f"https://x.com/profiles/{username}.jpg",
         "followers": [],
         "following": [],
         "liked_posts": [],
@@ -500,18 +280,21 @@ for i in range(num_posts_to_add):
     num_reposts = random.choices([0, 1, 2, 3], weights=[0.6, 0.2, 0.1, 0.1], k=1)[0]
     num_replies = random.choices([0, 1, 2, 3], weights=[0.5, 0.25, 0.15, 0.1], k=1)[0]
 
+    # Generate reposts (users who reposted this post)
+    possible_reposters = [uid for uid in all_user_uuids if uid != author_id]
+    reposts = random.sample(possible_reposters, min(num_reposts, len(possible_reposters)))
+
     post_data = {
         "id": post_uuid,
         "author_id": author_id,
         "text": random.choice(post_texts),
         "created_at": created_at,
         "likes": likes,
-        "reposts": [],
-        "replies": [],
+        "reposts": reposts,
         "metrics": {
             "views": random.randint(10, 2000),
             "likes": len(likes),
-            "reposts": num_reposts,
+            "reposts": len(reposts),
             "replies": num_replies,
         },
     }
@@ -528,7 +311,7 @@ for i in range(num_posts_to_add):
         )
 
 
-num_dm_convs_to_add = 30
+num_dm_convs_to_add = min(30, len(x_conversations))
 
 for i in range(num_dm_convs_to_add):
 
@@ -540,19 +323,32 @@ for i in range(num_dm_convs_to_add):
 
     dm_conv_uuid = str(uuid.uuid4())
 
-    num_messages = random.randint(2, 15)
-    messages = []
-    for m_idx in range(num_messages):
-        sender_id = random.choice([p1_id, p2_id])
-        timestamp = generate_random_iso_timestamp(days_ago_min=0, days_ago_max=30)
-        messages.append(
-            {
-                "id": str(uuid.uuid4()),
-                "sender_id": sender_id,
-                "text": random.choice(dm_messages),
-                "timestamp": timestamp,
-            }
-        )
+    # Use a structured conversation from x_conversations
+    conv_key = f"conversation_{i+1}"
+    if conv_key in x_conversations:
+        conversation = x_conversations[conv_key]
+        messages = []
+        base_timestamp = generate_random_iso_timestamp(days_ago_min=0, days_ago_max=30)
+        
+        for msg_idx, (user_label, text) in enumerate(conversation):
+            # Map user_1 and user_2 to actual participant IDs
+            if user_label == "user_1":
+                sender_id = p1_id
+            else:
+                sender_id = p2_id
+            
+            # Add some time progression between messages
+            time_offset = datetime.timedelta(minutes=msg_idx * random.randint(5, 30))
+            msg_timestamp = (datetime.datetime.fromisoformat(base_timestamp.replace('Z', '+00:00')) + time_offset).isoformat(timespec="milliseconds") + "Z"
+            
+            messages.append(
+                {
+                    "id": str(uuid.uuid4()),
+                    "sender_id": sender_id,
+                    "text": text,
+                    "timestamp": msg_timestamp,
+                }
+            )
 
     messages.sort(key=lambda x: x["timestamp"])
 

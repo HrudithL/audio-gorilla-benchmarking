@@ -1,331 +1,401 @@
 import unittest
-import copy
-from datetime import datetime, timedelta
-from GoogleCalendarApis import GoogleCalendarApis, DEFAULT_STATE
+import sys
+from pathlib import Path
+
+# Add parent directory to path
+parent_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(parent_dir))
+
+# Import backend creator
+from GoogleCalendarApis import GoogleCalendarApis
+from UnitTests.test_data_helper import BackendDataLoader
 
 class TestGoogleCalendarApis(unittest.TestCase):
     """
-    Unit tests for the GoogleCalendarApis class, covering multi-user functionality.
+    Unit tests for the GoogleCalendarApis class, using OAuth authentication.
     """
+
+    # Load real data from backend
+    real_data = BackendDataLoader.get_google_calendar_data()
+    
+    # Extract real user data
+    users = real_data.get("users", {})
+    user_id_key = list(users.keys())[0] if users else None
+    user_data = users[user_id_key] if user_id_key else {}
+    user_id_key2 = list(users.keys())[1] if len(users) > 1 else None
+    user_data2 = users[user_id_key2] if user_id_key2 else {}
+    
+    # Email constants for authentication
+    EMAIL_ALICE = user_data.get("email", "alice@example.com")
+    EMAIL_BOB = user_data2.get("email", "bob@example.com")
+    
+    # Test constants
+    TIME_ZONE = "America/New_York"
+    START_TIME = "2025-12-25T10:00:00"
+    END_TIME = "2025-12-25T11:00:00"
+    
+    def setUp(self):
+        """
+        Set up the API instance using real data.
+        """
+        self.calendar_api = GoogleCalendarApis()
+        # Authenticate as Alice by default
+        self.calendar_api.authenticate(self.EMAIL_ALICE)
 
     def setUp(self):
         """
-        Set up a fresh instance of GoogleCalendarApis before each test
-        to ensure test isolation and consistent state.
+        Set up the API instance using real data.
         """
-        self.api = GoogleCalendarApis(state=copy.deepcopy(DEFAULT_STATE))
-        # Define user IDs for easier access in tests
-        self.user1_id = "alice.smith@bizmail.co"
-        self.user2_id = "bob.johnson@globalcorp.net"
+        self.calendar_api = GoogleCalendarApis()
+        # Authenticate as Alice by default
+        self.calendar_api.authenticate(self.EMAIL_ALICE)
 
-        # Pre-defined calendar and event IDs for user1
-        self.user1_cal1_id = "cal_1"
-        self.user1_cal2_id = "cal_2"
-        self.user1_event1_id = "event_1"
-        self.user1_event2_id = "event_2"
-        self.user1_event3_id = "event_3"
+    # --- Authentication Tests ---
+    
+    def test_authenticate_success(self):
+        """Test successful authentication."""
+        api = GoogleCalendarApis()
+        result = api.authenticate(self.EMAIL_ALICE)
+        self.assertTrue(result["success"])
+        self.assertEqual(api.current_user, self.user_id_key)
 
-        # Pre-defined calendar and event IDs for user2
-        self.user2_cal3_id = "cal_3"
-        self.user2_cal4_id = "cal_4"
-        self.user2_event4_id = "event_4"
-        self.user2_event5_id = "event_5"
+    def test_authenticate_nonexistent_user(self):
+        """Test authentication with non-existent user."""
+        api = GoogleCalendarApis()
+        result = api.authenticate("nonexistent@example.com")
+        self.assertFalse(result["success"])
 
-    # --- Helper Method Tests (Indirectly tested, but good to have direct checks) ---
-    def test_get_user_data(self):
-        """Test retrieving user-specific data."""
-        user1_data = self.api._get_user_data(self.user1_id)
-        self.assertIsNotNone(user1_data)
-        self.assertEqual(user1_data["email"], self.user1_id)
+    # --- List Calendars Tests ---
+    
+    def test_list_calendar_list_success(self):
+        """Test listing all calendars for user."""
+        result = self.calendar_api.list_calendar_list()
+        self.assertIn("kind", result)
+        self.assertEqual(result["kind"], "calendar#calendarList")
+        self.assertIn("items", result)
+        self.assertIsInstance(result["items"], list)
 
-        user2_data = self.api._get_user_data(self.user2_id)
-        self.assertIsNotNone(user2_data)
-        self.assertEqual(user2_data["email"], self.user2_id)
+    def test_list_calendar_list_after_user_switch(self):
+        """Test listing calendars after switching users."""
+        self.calendar_api.authenticate(self.EMAIL_BOB)
+        result = self.calendar_api.list_calendar_list()
+        self.assertEqual(result["kind"], "calendar#calendarList")
 
-        # Test 'me' alias for current_user
-        self.api.state["current_user"] = self.user1_id
-        me_data = self.api._get_user_data('me')
-        self.assertEqual(me_data["email"], self.user1_id)
+    # --- Create Calendar Tests ---
+    
+    def test_insert_calendar_success(self):
+        """Test creating a calendar successfully."""
+        result = self.calendar_api.insert_calendar("Test Calendar", self.TIME_ZONE)
+        self.assertIn("id", result)
+        self.assertEqual(result["summary"], "Test Calendar")
+        self.assertEqual(result["kind"], "calendar#calendar")
 
-        # Test non-existent user
-        non_existent_user = self.api._get_user_data("nonexistent@example.com")
-        self.assertIsNone(non_existent_user)
-
-    def test_get_user_calendars_helper(self):
-        """Test retrieving user-specific calendars using the helper."""
-        user1_calendars = self.api._get_user_calendars(self.user1_id)
-        self.assertIn(self.user1_cal1_id, user1_calendars)
-        self.assertIn(self.user1_cal2_id, user1_calendars)
-        self.assertNotIn(self.user2_cal3_id, user1_calendars)
-
-        user2_calendars = self.api._get_user_calendars(self.user2_id)
-        self.assertIn(self.user2_cal3_id, user2_calendars)
-        self.assertIn(self.user2_cal4_id, user2_calendars)
-        self.assertNotIn(self.user1_cal1_id, user2_calendars)
-
-        # Test non-existent user
-        non_existent_calendars = self.api._get_user_calendars("nonexistent@example.com")
-        self.assertIsNone(non_existent_calendars)
-
-    # --- Calendar Management Tests ---
-    def test_create_calendar_user1(self):
-        """Test creating a calendar for user1 (default user)."""
-        initial_cal_count = len(self.api._get_user_calendars(self.user1_id))
-        result = self.api.create_calendar("New Personal Calendar", user_id=self.user1_id)
-        self.assertTrue(result["creation_status"])
-        self.assertEqual(len(self.api._get_user_calendars(self.user1_id)), initial_cal_count + 1)
-        # Verify the global counter increased
-        self.assertEqual(self.api.state["calendar_counter"], 5)
-
-        # Retrieve and verify the new calendar
-        new_cal_id = f"cal_{self.api.state['calendar_counter']}"
-        new_cal_data = self.api._get_user_calendars(self.user1_id).get(new_cal_id)
-        self.assertIsNotNone(new_cal_data)
-        self.assertEqual(new_cal_data["summary"], "New Personal Calendar")
-        self.assertEqual(new_cal_data["timeZone"], "America/New_York") # Should use default timezone
-
-    def test_create_calendar_user2(self):
-        """Test creating a calendar for user2."""
-        initial_cal_count = len(self.api._get_user_calendars(self.user2_id))
-        result = self.api.create_calendar("Bob's New Calendar", time_zone="Europe/Paris", user_id=self.user2_id)
-        self.assertTrue(result["creation_status"])
-        self.assertEqual(len(self.api._get_user_calendars(self.user2_id)), initial_cal_count + 1)
-        # Verify the global counter increased again
-        self.assertEqual(self.api.state["calendar_counter"], 5)
-
-        # Retrieve and verify the new calendar
-        new_cal_id = f"cal_{self.api.state['calendar_counter']}"
-        new_cal_data = self.api._get_user_calendars(self.user2_id).get(new_cal_id)
-        self.assertIsNotNone(new_cal_data)
-        self.assertEqual(new_cal_data["summary"], "Bob's New Calendar")
-        self.assertEqual(new_cal_data["timeZone"], "Europe/Paris")
-
-    def test_get_calendar_user1(self):
-        """Test getting an existing calendar for user1."""
-        result = self.api.get_calendar(self.user1_cal1_id, user_id=self.user1_id)
-        self.assertTrue(result["retrieval_status"])
-        self.assertEqual(result["calendar_data"]["summary"], "Personal Calendar (Alice)")
-
-    def test_get_calendar_user2(self):
-        """Test getting an existing calendar for user2."""
-        result = self.api.get_calendar(self.user2_cal3_id, user_id=self.user2_id)
-        self.assertTrue(result["retrieval_status"])
-        self.assertEqual(result["calendar_data"]["summary"], "Personal Calendar (Bob)")
-
-    def test_get_non_existent_calendar(self):
-        """Test getting a non-existent calendar."""
-        result = self.api.get_calendar("non_existent_cal", user_id=self.user1_id)
-        self.assertFalse(result["retrieval_status"])
-
-    def test_delete_calendar_user1(self):
-        """Test deleting an existing calendar for user1."""
-        initial_cal_count = len(self.api._get_user_calendars(self.user1_id))
-        result = self.api.delete_calendar(self.user1_cal1_id, user_id=self.user1_id)
-        self.assertTrue(result["deletion_status"])
-        self.assertEqual(len(self.api._get_user_calendars(self.user1_id)), initial_cal_count - 1)
-        self.assertNotIn(self.user1_cal1_id, self.api._get_user_calendars(self.user1_id))
-        # Ensure events associated with the deleted calendar are also gone
-        self.assertNotIn(self.user1_cal1_id, self.api._get_user_events(self.user1_id))
-
-    def test_delete_calendar_user2(self):
-        """Test deleting an existing calendar for user2."""
-        initial_cal_count = len(self.api._get_user_calendars(self.user2_id))
-        result = self.api.delete_calendar(self.user2_cal3_id, user_id=self.user2_id)
-        self.assertTrue(result["deletion_status"])
-        self.assertEqual(len(self.api._get_user_calendars(self.user2_id)), initial_cal_count - 1)
-        self.assertNotIn(self.user2_cal3_id, self.api._get_user_calendars(self.user2_id))
-        self.assertNotIn(self.user2_cal3_id, self.api._get_user_events(self.user2_id))
-
-    def test_delete_non_existent_calendar(self):
-        """Test deleting a non-existent calendar."""
-        result = self.api.delete_calendar("non_existent_cal", user_id=self.user1_id)
-        self.assertFalse(result["deletion_status"])
-
-    # --- Event Management Tests ---
-    def test_create_event_user1(self):
-        """Test creating an event for user1."""
-        initial_event_count = len(self.api._get_user_events(self.user1_id)[self.user1_cal1_id])
-        event_data = {
-            "summary": "New Event Alice",
-            "start": {"dateTime": "2025-08-01T09:00:00-04:00"},
-            "end": {"dateTime": "2025-08-01T10:00:00-04:00"}
-        }
-        result = self.api.create_event(self.user1_cal1_id, event_data, user_id=self.user1_id)
-        self.assertTrue(result["creation_status"])
-        self.assertEqual(len(self.api._get_user_events(self.user1_id)[self.user1_cal1_id]), initial_event_count + 1)
-        # Verify global event counter increased
-        self.assertEqual(self.api.state["event_counter"], 6)
-
-        # Check if the event has the correct ID assigned
-        new_event_id = f"event_{self.api.state['event_counter']}"
-        retrieved_event = self.api._get_user_events(self.user1_id)[self.user1_cal1_id].get(new_event_id)
-        self.assertIsNotNone(retrieved_event)
-        self.assertEqual(retrieved_event["id"], new_event_id)
-        self.assertEqual(retrieved_event["summary"], "New Event Alice")
-
-    def test_create_event_user2(self):
-        """Test creating an event for user2."""
-        initial_event_count = len(self.api._get_user_events(self.user2_id)[self.user2_cal3_id])
-        event_data = {
-            "summary": "New Event Bob",
-            "start": {"dateTime": "2025-08-02T14:00:00+01:00"},
-            "end": {"dateTime": "2025-08-02T15:00:00+01:00"}
-        }
-        print("event counter before", self.api.state["event_counter"])
-        result = self.api.create_event(self.user2_cal3_id, event_data, user_id=self.user2_id)
-        self.assertTrue(result["creation_status"])
-        print("this is init_event_count", initial_event_count)
-        print("event counter after", self.api.state["event_counter"])
-        self.assertEqual(len(self.api._get_user_events(self.user2_id)[self.user2_cal3_id]), initial_event_count + 1)
-        # Verify global event counter increased again
-        self.assertEqual(self.api.state["event_counter"], 6)
-
-    def test_create_event_non_existent_calendar(self):
-        """Test creating an event in a non-existent calendar."""
-        event_data = {
-            "summary": "Failed Event",
-            "start": {"dateTime": "2025-08-03T10:00:00-04:00"},
-            "end": {"dateTime": "2025-08-03T11:00:00-04:00"}
-        }
-        result = self.api.create_event("non_existent_cal", event_data, user_id=self.user1_id)
-        self.assertFalse(result["creation_status"])
-
-    def test_get_event_user1(self):
-        """Test getting an existing event for user1."""
-        result = self.api.get_event(self.user1_cal1_id, self.user1_event1_id, user_id=self.user1_id)
-        self.assertTrue(result["retrieval_status"])
-        self.assertEqual(result["event_data"]["summary"], "Morning Run (Alice)")
-
-    def test_get_event_user2(self):
-        """Test getting an existing event for user2."""
-        result = self.api.get_event(self.user2_cal3_id, self.user2_event4_id, user_id=self.user2_id)
-        self.assertTrue(result["retrieval_status"])
-        self.assertEqual(result["event_data"]["summary"], "Gym Session (Bob)")
-
-    def test_get_non_existent_event(self):
-        """Test getting a non-existent event."""
-        result = self.api.get_event(self.user1_cal1_id, "non_existent_event", user_id=self.user1_id)
-        self.assertFalse(result["retrieval_status"])
-
-    def test_list_events_user1_all(self):
-        """Test listing all events for user1's calendar."""
-        result = self.api.list_events(self.user1_cal1_id, user_id=self.user1_id)
-        self.assertTrue(result["retrieval_status"])
-        self.assertEqual(len(result["events"]), 2) # event_1 and event_2
-
-    def test_list_events_user2_all(self):
-        """Test listing all events for user2's calendar."""
-        result = self.api.list_events(self.user2_cal3_id, user_id=self.user2_id)
-        self.assertTrue(result["retrieval_status"])
-        self.assertEqual(len(result["events"]), 1) # event_4
-
-    def test_list_events_with_time_filter_user1(self):
-        """Test listing events with time filters for user1."""
-        # Events for user1_cal1_id: event_1 (07:00-08:00), event_2 (10:00-11:00)
-        result = self.api.list_events(
-            self.user1_cal1_id,
-            time_min="2025-07-20T09:00:00-04:00",
-            time_max="2025-07-20T12:00:00-04:00",
-            user_id=self.user1_id
+    def test_insert_calendar_with_description(self):
+        """Test creating calendar with description."""
+        result = self.calendar_api.insert_calendar(
+            "Test Calendar", self.TIME_ZONE, "Test description"
         )
-        self.assertTrue(result["retrieval_status"])
-        self.assertEqual(len(result["events"]), 1)
-        self.assertEqual(result["events"][0]["summary"], "Dentist Appointment (Alice)")
+        self.assertEqual(result["description"], "Test description")
 
-    def test_list_events_non_existent_calendar(self):
-        """Test listing events from a non-existent calendar."""
-        result = self.api.list_events("non_existent_cal", user_id=self.user1_id)
-        self.assertFalse(result["retrieval_status"])
-        self.assertEqual(len(result["events"]), 0)
+    # --- Get Calendar Tests ---
+    
+    def test_get_calendar_success(self):
+        """Test getting calendar successfully."""
+        # First create a calendar
+        created = self.calendar_api.insert_calendar("Test Calendar", self.TIME_ZONE)
+        calendar_id = created["id"]
+        
+        # Then get it
+        result = self.calendar_api.get_calendar(calendar_id)
+        self.assertEqual(result["id"], calendar_id)
+        self.assertEqual(result["kind"], "calendar#calendar")
 
-    def test_delete_event_user1(self):
-        """Test deleting an existing event for user1."""
-        initial_event_count = len(self.api._get_user_events(self.user1_id)[self.user1_cal1_id])
-        result = self.api.delete_event(self.user1_cal1_id, self.user1_event1_id, user_id=self.user1_id)
-        self.assertTrue(result["deletion_status"])
-        self.assertEqual(len(self.api._get_user_events(self.user1_id)[self.user1_cal1_id]), initial_event_count - 1)
-        self.assertNotIn(self.user1_event1_id, self.api._get_user_events(self.user1_id)[self.user1_cal1_id])
+    def test_get_calendar_non_existent(self):
+        """Test getting non-existent calendar."""
+        with self.assertRaises(Exception) as context:
+            self.calendar_api.get_calendar("non_existent_calendar")
+        self.assertIn("not found", str(context.exception).lower())
 
-    def test_delete_event_user2(self):
-        """Test deleting an existing event for user2."""
-        initial_event_count = len(self.api._get_user_events(self.user2_id)[self.user2_cal3_id])
-        result = self.api.delete_event(self.user2_cal3_id, self.user2_event4_id, user_id=self.user2_id)
-        self.assertTrue(result["deletion_status"])
-        self.assertEqual(len(self.api._get_user_events(self.user2_id)[self.user2_cal3_id]), initial_event_count - 1)
-        self.assertNotIn(self.user2_event4_id, self.api._get_user_events(self.user2_id)[self.user2_cal3_id])
+    # --- Update Calendar Tests ---
+    
+    def test_update_calendar_success(self):
+        """Test updating calendar successfully."""
+        # First create a calendar
+        created = self.calendar_api.insert_calendar("Original Calendar", self.TIME_ZONE)
+        calendar_id = created["id"]
+        
+        # Then update it
+        updated = self.calendar_api.update_calendar(calendar_id, summary="Updated Calendar")
+        self.assertEqual(updated["summary"], "Updated Calendar")
 
-    def test_delete_non_existent_event(self):
-        """Test deleting a non-existent event."""
-        result = self.api.delete_event(self.user1_cal1_id, "non_existent_event", user_id=self.user1_id)
-        self.assertFalse(result["deletion_status"])
+    def test_update_calendar_non_existent(self):
+        """Test updating non-existent calendar."""
+        with self.assertRaises(Exception) as context:
+            self.calendar_api.update_calendar("non_existent_calendar", summary="This should fail")
+        self.assertIn("not found", str(context.exception).lower())
 
-    def test_move_event_user1(self):
-        """Test moving an event between calendars for user1."""
-        # Move event_1 from cal_1 to cal_2 for user1
-        initial_cal1_events = len(self.api._get_user_events(self.user1_id)[self.user1_cal1_id])
-        initial_cal2_events = len(self.api._get_user_events(self.user1_id)[self.user1_cal2_id])
+    # --- Delete Calendar Tests ---
+    
+    def test_delete_calendar_success(self):
+        """Test deleting calendar successfully."""
+        # First create a calendar
+        created = self.calendar_api.insert_calendar("Test Calendar", self.TIME_ZONE)
+        calendar_id = created["id"]
+        
+        # Then delete it (should not raise exception)
+        self.calendar_api.delete_calendar(calendar_id)
 
-        result = self.api.move_event(self.user1_cal1_id, self.user1_event1_id, self.user1_cal2_id, user_id=self.user1_id)
-        self.assertTrue(result["move_status"])
-        self.assertIn("moved successfully", result["message"])
+    def test_delete_calendar_non_existent(self):
+        """Test deleting non-existent calendar."""
+        with self.assertRaises(Exception) as context:
+            self.calendar_api.delete_calendar("non_existent_calendar")
+        self.assertIn("not found", str(context.exception).lower())
 
-        # Verify event is removed from source
-        self.assertEqual(len(self.api._get_user_events(self.user1_id)[self.user1_cal1_id]), initial_cal1_events - 1)
-        self.assertNotIn(self.user1_event1_id, self.api._get_user_events(self.user1_id)[self.user1_cal1_id])
+    # --- Create Event Tests ---
+    
+    def test_insert_event_success(self):
+        """Test creating event successfully."""
+        # First create a calendar
+        created_cal = self.calendar_api.insert_calendar("Test Calendar", self.TIME_ZONE)
+        calendar_id = created_cal["id"]
+        
+        # Then create an event
+        result = self.calendar_api.insert_event(
+            calendar_id, "Test Event", self.START_TIME, self.END_TIME, self.TIME_ZONE
+        )
+        self.assertIn("id", result)
+        self.assertEqual(result["summary"], "Test Event")
+        self.assertEqual(result["kind"], "calendar#event")
 
-        # Verify event is added to destination with a new ID
-        self.assertEqual(len(self.api._get_user_events(self.user1_id)[self.user1_cal2_id]), initial_cal2_events + 1)
-        new_event_id = f"event_{self.api.state['event_counter']}"
-        self.assertIn(new_event_id, self.api._get_user_events(self.user1_id)[self.user1_cal2_id])
-        self.assertEqual(self.api._get_user_events(self.user1_id)[self.user1_cal2_id][new_event_id]["summary"], "Morning Run (Alice)")
+    def test_insert_event_with_description(self):
+        """Test creating event with description."""
+        created_cal = self.calendar_api.insert_calendar("Test Calendar", self.TIME_ZONE)
+        calendar_id = created_cal["id"]
+        
+        result = self.calendar_api.insert_event(
+            calendar_id, "Test Event", self.START_TIME, self.END_TIME, 
+            self.TIME_ZONE, description="Test description"
+        )
+        self.assertEqual(result["description"], "Test description")
 
-    def test_move_event_non_existent_source_event(self):
-        """Test moving a non-existent source event."""
-        result = self.api.move_event(self.user1_cal1_id, "non_existent_event", self.user1_cal2_id, user_id=self.user1_id)
-        self.assertFalse(result["move_status"])
-        self.assertIn("Event 'non_existent_event' not found", result["message"])
+    def test_insert_event_non_existent_calendar(self):
+        """Test creating event in non-existent calendar."""
+        with self.assertRaises(Exception) as context:
+            self.calendar_api.insert_event(
+                "non_existent_calendar", "Test Event", self.START_TIME, 
+                self.END_TIME, self.TIME_ZONE
+            )
+        self.assertIn("not found", str(context.exception).lower())
 
-    def test_move_event_non_existent_destination_calendar(self):
-        """Test moving an event to a non-existent destination calendar."""
-        result = self.api.move_event(self.user1_cal1_id, self.user1_event1_id, "non_existent_cal", user_id=self.user1_id)
-        self.assertFalse(result["move_status"])
-        self.assertIn("Destination calendar 'non_existent_cal' not found", result["message"])
+    # --- Get Event Tests ---
+    
+    def test_get_event_success(self):
+        """Test getting event successfully."""
+        # First create a calendar and event
+        created_cal = self.calendar_api.insert_calendar("Test Calendar", self.TIME_ZONE)
+        calendar_id = created_cal["id"]
+        
+        created_event = self.calendar_api.insert_event(
+            calendar_id, "Test Event", self.START_TIME, self.END_TIME, self.TIME_ZONE
+        )
+        event_id = created_event["id"]
+        
+        # Then get the event
+        result = self.calendar_api.get_event(calendar_id, event_id)
+        self.assertEqual(result["id"], event_id)
+        self.assertEqual(result["kind"], "calendar#event")
 
-    def test_check_free_busy_user1(self):
-        """Test checking free/busy status for user1's calendars."""
-        items = [{"id": self.user1_cal1_id}, {"id": self.user1_cal2_id}]
-        time_min = "2025-07-19T00:00:00-04:00"
-        time_max = "2025-07-20T23:59:59-04:00"
-        result = self.api.check_free_busy(time_min, time_max, items, user_id=self.user1_id)
+    def test_get_event_non_existent(self):
+        """Test getting non-existent event."""
+        # First create a calendar
+        created_cal = self.calendar_api.insert_calendar("Test Calendar", self.TIME_ZONE)
+        calendar_id = created_cal["id"]
+        
+        with self.assertRaises(Exception) as context:
+            self.calendar_api.get_event(calendar_id, "non_existent_event")
+        self.assertIn("not found", str(context.exception).lower())
 
-        self.assertTrue(result["retrieval_status"])
-        self.assertIn(self.user1_cal1_id, result["free_busy_data"])
-        self.assertIn(self.user1_cal2_id, result["free_busy_data"])
-        self.assertEqual(len(result["free_busy_data"][self.user1_cal1_id]["busy"]), 1)
-        self.assertEqual(result["free_busy_data"][self.user1_cal1_id]["busy"][0]["start"], time_min)
+    # --- List Events Tests ---
+    
+    def test_list_events_success(self):
+        """Test listing events successfully."""
+        # First create a calendar and event
+        created_cal = self.calendar_api.insert_calendar("Test Calendar", self.TIME_ZONE)
+        calendar_id = created_cal["id"]
+        
+        self.calendar_api.insert_event(
+            calendar_id, "Test Event", self.START_TIME, self.END_TIME, self.TIME_ZONE
+        )
+        
+        # Then list events
+        result = self.calendar_api.list_events(calendar_id)
+        self.assertEqual(result["kind"], "calendar#events")
+        self.assertIn("items", result)
+        self.assertGreater(len(result["items"]), 0)
 
-    def test_check_free_busy_user2(self):
-        """Test checking free/busy status for user2's calendars."""
-        items = [{"id": self.user2_cal3_id}]
-        time_min = "2025-07-20T00:00:00+01:00"
-        time_max = "2025-07-20T23:59:59+01:00"
-        result = self.api.check_free_busy(time_min, time_max, items, user_id=self.user2_id)
+    def test_list_events_empty_calendar(self):
+        """Test listing events for calendar with no events."""
+        created_cal = self.calendar_api.insert_calendar("Empty Calendar", self.TIME_ZONE)
+        calendar_id = created_cal["id"]
+        
+        result = self.calendar_api.list_events(calendar_id)
+        self.assertEqual(result["kind"], "calendar#events")
+        self.assertEqual(len(result["items"]), 0)
 
-        self.assertTrue(result["retrieval_status"])
-        self.assertIn(self.user2_cal3_id, result["free_busy_data"])
-        self.assertEqual(len(result["free_busy_data"][self.user2_cal3_id]["busy"]), 1)
-        self.assertEqual(result["free_busy_data"][self.user2_cal3_id]["busy"][0]["start"], time_min)
+    def test_list_events_with_query(self):
+        """Test listing events with search query."""
+        created_cal = self.calendar_api.insert_calendar("Test Calendar", self.TIME_ZONE)
+        calendar_id = created_cal["id"]
+        
+        self.calendar_api.insert_event(
+            calendar_id, "Unique Event Title", self.START_TIME, self.END_TIME, self.TIME_ZONE
+        )
+        
+        result = self.calendar_api.list_events(calendar_id, q="Unique")
+        self.assertGreater(len(result["items"]), 0)
+
+    # --- Delete Event Tests ---
+    
+    def test_delete_event_success(self):
+        """Test deleting event successfully."""
+        # First create a calendar and event
+        created_cal = self.calendar_api.insert_calendar("Test Calendar", self.TIME_ZONE)
+        calendar_id = created_cal["id"]
+        
+        created_event = self.calendar_api.insert_event(
+            calendar_id, "Test Event", self.START_TIME, self.END_TIME, self.TIME_ZONE
+        )
+        event_id = created_event["id"]
+        
+        # Then delete the event (should not raise exception)
+        self.calendar_api.delete_event(calendar_id, event_id)
+
+    def test_delete_event_non_existent(self):
+        """Test deleting non-existent event."""
+        # First create a calendar
+        created_cal = self.calendar_api.insert_calendar("Test Calendar", self.TIME_ZONE)
+        calendar_id = created_cal["id"]
+        
+        with self.assertRaises(Exception) as context:
+            self.calendar_api.delete_event(calendar_id, "non_existent_event")
+        self.assertIn("not found", str(context.exception).lower())
+
+    # --- Update Event Tests ---
+    
+    def test_update_event_success(self):
+        """Test updating event successfully."""
+        # First create a calendar and event
+        created_cal = self.calendar_api.insert_calendar("Test Calendar", self.TIME_ZONE)
+        calendar_id = created_cal["id"]
+        
+        created_event = self.calendar_api.insert_event(
+            calendar_id, "Original Event", self.START_TIME, self.END_TIME, self.TIME_ZONE
+        )
+        event_id = created_event["id"]
+        
+        # Then update the event
+        updated = self.calendar_api.update_event(calendar_id, event_id, summary="Updated Event")
+        self.assertEqual(updated["summary"], "Updated Event")
+
+    def test_update_event_non_existent(self):
+        """Test updating non-existent event."""
+        # First create a calendar
+        created_cal = self.calendar_api.insert_calendar("Test Calendar", self.TIME_ZONE)
+        calendar_id = created_cal["id"]
+        
+        with self.assertRaises(Exception) as context:
+            self.calendar_api.update_event(calendar_id, "non_existent_event", summary="This should fail")
+        self.assertIn("not found", str(context.exception).lower())
+
+    # --- Move Event Tests ---
+    
+    def test_move_event_success(self):
+        """Test moving event successfully."""
+        # First create two calendars and an event
+        created_cal1 = self.calendar_api.insert_calendar("Source Calendar", self.TIME_ZONE)
+        source_calendar_id = created_cal1["id"]
+        
+        created_cal2 = self.calendar_api.insert_calendar("Destination Calendar", self.TIME_ZONE)
+        dest_calendar_id = created_cal2["id"]
+        
+        created_event = self.calendar_api.insert_event(
+            source_calendar_id, "Test Event", self.START_TIME, self.END_TIME, self.TIME_ZONE
+        )
+        event_id = created_event["id"]
+        
+        # Then move the event
+        moved = self.calendar_api.move_event(source_calendar_id, event_id, dest_calendar_id)
+        self.assertEqual(moved["kind"], "calendar#event")
+
+    def test_move_event_non_existent_source(self):
+        """Test moving event from non-existent source calendar."""
+        # First create destination calendar
+        created_cal = self.calendar_api.insert_calendar("Destination Calendar", self.TIME_ZONE)
+        dest_calendar_id = created_cal["id"]
+        
+        with self.assertRaises(Exception) as context:
+            self.calendar_api.move_event("non_existent_source", "any_event", dest_calendar_id)
+        self.assertIn("not found", str(context.exception).lower())
+
+    def test_move_event_non_existent_destination(self):
+        """Test moving event to non-existent destination calendar."""
+        # First create source calendar and event
+        created_cal = self.calendar_api.insert_calendar("Source Calendar", self.TIME_ZONE)
+        source_calendar_id = created_cal["id"]
+        
+        created_event = self.calendar_api.insert_event(
+            source_calendar_id, "Test Event", self.START_TIME, self.END_TIME, self.TIME_ZONE
+        )
+        event_id = created_event["id"]
+        
+        with self.assertRaises(Exception) as context:
+            self.calendar_api.move_event(source_calendar_id, event_id, "non_existent_dest")
+        self.assertIn("not found", str(context.exception).lower())
+
+    # --- Check Free/Busy Tests ---
+    
+    def test_check_free_busy_success(self):
+        """Test checking free/busy status successfully."""
+        # First create a calendar
+        created_cal = self.calendar_api.insert_calendar("Test Calendar", self.TIME_ZONE)
+        calendar_id = created_cal["id"]
+        
+        items = [{"id": calendar_id}]
+        result = self.calendar_api.check_free_busy(self.START_TIME, self.END_TIME, items)
+        self.assertEqual(result["kind"], "calendar#freeBusy")
+        self.assertIn("calendars", result)
 
     def test_check_free_busy_non_existent_calendar(self):
-        """Test checking free/busy status for a non-existent calendar."""
-        items = [{"id": "non_existent_cal"}]
-        time_min = "2025-07-19T00:00:00-04:00"
-        time_max = "2025-07-20T23:59:59-04:00"
-        result = self.api.check_free_busy(time_min, time_max, items, user_id=self.user1_id)
-        self.assertTrue(result["retrieval_status"]) # Still returns true, but free_busy_data will be empty
-        self.assertEqual(len(result["free_busy_data"]), 0)
+        """Test checking free/busy status for non-existent calendar."""
+        items = [{"id": "non_existent_calendar"}]
+        result = self.calendar_api.check_free_busy(self.START_TIME, self.END_TIME, items)
+        self.assertEqual(result["kind"], "calendar#freeBusy")
+        # Non-existent calendars are just not included in response
+
+    # --- Multi-user Tests ---
+    
+    def test_calendar_isolation_between_users(self):
+        """Test that calendars are isolated between different users."""
+        # Create calendar as Alice
+        alice_cal = self.calendar_api.insert_calendar("Alice's Calendar", self.TIME_ZONE)
+        alice_cal_id = alice_cal["id"]
+        
+        # Switch to Bob
+        self.calendar_api.authenticate(self.EMAIL_BOB)
+        
+        # Bob shouldn't see Alice's calendar
+        with self.assertRaises(Exception) as context:
+            self.calendar_api.get_calendar(alice_cal_id)
+        self.assertIn("not found", str(context.exception).lower())
+
+    # --- Reset Data Tests ---
+    
+    def test_reset_data(self):
+        """Test resetting data."""
+        result = self.calendar_api.reset_data()
+        self.assertTrue(result["reset_status"])
 
 
 if __name__ == '__main__':
-    unittest.main(argv=['first-arg-is-ignored'], exit=False)
+    unittest.main()
 

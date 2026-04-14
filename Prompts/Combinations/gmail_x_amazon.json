@@ -1,0 +1,468 @@
+{
+    "multistep": [
+        {
+            "prompt": "Read my Gmail about order confirmations then check Amazon cart total and post on X about shopping deals I found.",
+            "context": {
+                "gmail": {
+                    "user_id": "8d20403e-7ae2-4a54-8e7b-552062246ad5"
+                },
+                "x": {
+                    "user_id": "fe53fb9b-1a20-4118-b1e5-1e2e1d74708a"
+                },
+                "amazon": {
+                    "user_id": "602bc161-c8a7-42b7-ac23-a22cf542cbf4"
+                }
+            },
+            "ground_truth": {
+                "gmail": ["get_user_by_id('8d20403e-7ae2-4a54-8e7b-552062246ad5')", "authenticate('kenji.tanaka15@pet-adoption.online')", "list_messages('8d20403e-7ae2-4a54-8e7b-552062246ad5', 'order confirmation', None, None, 10, False)", "get_message('8d20403e-7ae2-4a54-8e7b-552062246ad5', 'decdc67666b640f0', 'full')"],
+                "x": ["get_user_by_id('fe53fb9b-1a20-4118-b1e5-1e2e1d74708a')", "authenticate('token_ava.reyes2093@healthy-recipes.blog')", "create_tweet('Found some incredible deals on Amazon today! Shopping smart and saving big.')"],
+                "amazon": ["get_user_by_id('602bc161-c8a7-42b7-ac23-a22cf542cbf4')", "login_user('victoria.dean@vintage-clothing.store', '&7Z81C5z')", "show_cart()"]
+            }
+        },
+        {
+            "prompt": "Check my Amazon cart and remove an item then email aisha about cart updates and tweet about it.",
+            "context": {
+                "gmail": {
+                    "user_id": "17512bb1-9f5d-452d-b8b4-c2e39fc96df8"
+                },
+                "x": {
+                    "user_id": "4d111451-0c62-4aed-9e63-e8f4ab7f0291"
+                },
+                "amazon": {
+                    "user_id": "0e1cec34-786f-44a3-bdf4-75d4c5d182de"
+                }
+            },
+            "ground_truth": {
+                "gmail": ["get_user_by_id('17512bb1-9f5d-452d-b8b4-c2e39fc96df8')", "authenticate('aisha.ibrahim13@party-supplies.shop')", "send_message('17512bb1-9f5d-452d-b8b4-c2e39fc96df8', {'raw': 'RnJvbTphaXNoYS5pYnJhaGltMTNAcGFydHktc3VwcGxpZXMuc2hvcApUbzphaXNoYS5pYnJhaGltMTNAcGFydHktc3VwcGxpZXMuc2hvcApTdWJqZWN0OkFtYXpvbiBjYXJ0IHVwZGF0ZQoKSSByZW1vdmVkIGFuIGl0ZW0gZnJvbSBteSBjYXJ0Lg=='})"],
+                "x": ["get_user_by_id('4d111451-0c62-4aed-9e63-e8f4ab7f0291')", "authenticate('aisha_ibrahim40')", "create_tweet('Cleaned up my Amazon cart! Less impulse buying, more intentional shopping.')"],
+                "amazon": ["get_user_by_id('0e1cec34-786f-44a3-bdf4-75d4c5d182de')", "login_user('aisha.ibrahim@financial-news.com', '$2S&o5j(')", "show_cart()", "remove_from_cart('bc4e62da-9d00-4443-9f90-c06c5963bf6a')"]
+            }
+        },
+        {
+            "prompt": "View my Amazon cart total and post on X then send a Gmail to arthur about my shopping plans.",
+            "context": {
+                "gmail": {
+                    "user_id": "580cb16d-fa17-425f-8ab7-77abe669c1ef"
+                },
+                "x": {
+                    "user_id": "daa4569a-eb7a-45d0-9e46-82d13f5952c4"
+                },
+                "amazon": {
+                    "user_id": "cdf14730-4fc0-46c5-8cfe-2a1c068dfac4"
+                }
+            },
+            "ground_truth": {
+                "gmail": ["get_user_by_id('580cb16d-fa17-425f-8ab7-77abe669c1ef')", "authenticate('arthur.thompson14@brandstudio.net')", "send_message('580cb16d-fa17-425f-8ab7-77abe669c1ef', {'raw': 'RnJvbTphcnRodXIudGhvbXBzb24xNEBicmFuZHN0dWRpby5uZXQKVG86YXJ0aHVyLnRob21wc29uMTRAYnJhbmRzdHVkaW8ubmV0ClN1YmplY3Q6U2hvcHBpbmcgcGxhbnMKCkkgaGF2ZSBzb21lIGl0ZW1zIGluIG15IEFtYXpvbiBjYXJ0IHRoYXQgSSBwbGFuIHRvIGJ1eS4='})"],
+                "x": ["get_user_by_id('daa4569a-eb7a-45d0-9e46-82d13f5952c4')", "authenticate('arthur_thompson53')", "create_tweet('My Amazon cart is getting full! Time to make some decisions about what I really need.')"],
+                "amazon": ["get_user_by_id('cdf14730-4fc0-46c5-8cfe-2a1c068dfac4')", "login_user('arthur.thompson@cloud-hosting.services', 'Mm4nRp))')", "show_cart()"]
+            }
+        },
+        {
+            "prompt": "Remove items from my Amazon cart and read my Gmail then post a tweet about smart shopping.",
+            "context": {
+                "gmail": {
+                    "user_id": "535366f1-3ec2-4f02-89a4-9c38c4a92984"
+                },
+                "x": {
+                    "user_id": "4c9c08a7-d4f1-443c-8e74-a1b7b829f407"
+                },
+                "amazon": {
+                    "user_id": "a690e289-c404-471c-87bf-5ad103603791"
+                }
+            },
+            "ground_truth": {
+                "gmail": ["get_user_by_id('535366f1-3ec2-4f02-89a4-9c38c4a92984')", "authenticate('chloe.dubois42@poetry-journal.com')", "list_messages('535366f1-3ec2-4f02-89a4-9c38c4a92984', 'shopping', None, None, 10, False)", "get_message('535366f1-3ec2-4f02-89a4-9c38c4a92984', '2b3132f396b41528', 'full')"],
+                "x": ["get_user_by_id('4c9c08a7-d4f1-443c-8e74-a1b7b829f407')", "authenticate('chloe_dubois32')", "create_tweet('Pro tip: Let items sit in your cart for a day before buying. Saves money and reduces impulse purchases!')"],
+                "amazon": ["get_user_by_id('a690e289-c404-471c-87bf-5ad103603791')", "login_user('chloe.dubois@analytics-tools.net', 'Db9f2aj6')", "remove_from_cart('ced67bf9-3693-4c51-9682-ae471b8d23df')", "remove_from_cart('97a66e35-87cc-4140-b3ad-1a2434788f34')"]
+            }
+        }
+    ],
+    "multiturn": [
+        {
+            "turns": [
+                {
+                    "role": "user",
+                    "content": "Check my Gmail for product recommendations"
+                },
+                {
+                    "role": "assistant",
+                    "ground_truth": {
+                        "gmail": ["get_user_by_id('0da4f8cd-f165-4a14-8ca9-5e215cd7ce1a')", "authenticate('anya.sharma61@audio-engineering.online')", "list_messages('0da4f8cd-f165-4a14-8ca9-5e215cd7ce1a', 'recommendation', None, None, 10, False)", "get_message('0da4f8cd-f165-4a14-8ca9-5e215cd7ce1a', '146147212995596d', 'full')"],
+                        "x": [],
+                        "amazon": []
+                    },
+                    "content": "You have an email from london dot reyes eighty eight at cloud-computing dot services with subject Risk assessment findings. The snippet mentions looking for a way to automate."
+                },
+                {
+                    "role": "user",
+                    "content": "Search Amazon for wireless mouse"
+                },
+                {
+                    "role": "assistant",
+                    "ground_truth": {
+                        "gmail": [],
+                        "x": [],
+                        "amazon": ["login_user('jasmine.perry@techsolutions.dev', 'qfdLAXD$')", "search_products('wireless mouse', category='Electronics')"]
+                    },
+                    "content": "I found several wireless mice including Logitech MX Master three S and Razer Basilisk V three Pro."
+                },
+                {
+                    "role": "user",
+                    "content": "Add the Logitech MX Master to cart"
+                },
+                {
+                    "role": "assistant",
+                    "ground_truth": {
+                        "gmail": [],
+                        "x": [],
+                        "amazon": ["add_to_cart('c91e0f0b-e7a6-4592-9ba2-6b772a165a03', 1)"]
+                    },
+                    "content": "Added Logitech MX Master three S to your Amazon cart."
+                },
+                {
+                    "role": "user",
+                    "content": "Post a tweet saying I just upgraded my mouse"
+                },
+                {
+                    "role": "assistant",
+                    "ground_truth": {
+                        "gmail": [],
+                        "x": ["authenticate('token_henry.bennett9331@websolutions.io')", "create_tweet('Just upgraded to the Logitech MX Master 3S! My productivity is about to go through the roof.')"],
+                        "amazon": []
+                    },
+                    "content": "Tweet posted successfully!"
+                }
+            ],
+            "context": {
+                "gmail": {
+                    "user_id": "0da4f8cd-f165-4a14-8ca9-5e215cd7ce1a"
+                },
+                "x": {
+                    "user_id": "e558af4a-2680-49ed-8caf-1cf9e6bedb21"
+                },
+                "amazon": {
+                    "user_id": "24dd902f-4ddf-4cac-97d5-30b3f231795e"
+                }
+            },
+            "ground_truth": {
+                "gmail": ["get_user_by_id('0da4f8cd-f165-4a14-8ca9-5e215cd7ce1a')", "authenticate('anya.sharma61@audio-engineering.online')", "list_messages('0da4f8cd-f165-4a14-8ca9-5e215cd7ce1a', 'recommendation', None, None, 10, False)", "get_message('0da4f8cd-f165-4a14-8ca9-5e215cd7ce1a', '146147212995596d', 'full')"],
+                "x": ["authenticate('token_henry.bennett9331@websolutions.io')", "create_tweet('Just upgraded to the Logitech MX Master 3S! My productivity is about to go through the roof.')"],
+                "amazon": ["login_user('jasmine.perry@techsolutions.dev', 'qfdLAXD$')", "search_products('wireless mouse', category='Electronics')", "add_to_cart('c91e0f0b-e7a6-4592-9ba2-6b772a165a03', 1)"]
+            }
+        },
+        {
+            "turns": [
+                {
+                    "role": "user",
+                    "content": "Read my Gmail about order confirmations"
+                },
+                {
+                    "role": "assistant",
+                    "ground_truth": {
+                        "gmail": ["get_user_by_id('8d20403e-7ae2-4a54-8e7b-552062246ad5')", "authenticate('kenji.tanaka15@pet-adoption.online')", "list_messages('8d20403e-7ae2-4a54-8e7b-552062246ad5', 'order', None, None, 10, False)", "get_message('8d20403e-7ae2-4a54-8e7b-552062246ad5', 'decdc67666b640f0', 'full')"],
+                        "x": [],
+                        "amazon": []
+                    },
+                    "content": "You have an email about a recent order with tracking information."
+                },
+                {
+                    "role": "user",
+                    "content": "Check my Amazon cart total"
+                },
+                {
+                    "role": "assistant",
+                    "ground_truth": {
+                        "gmail": [],
+                        "x": [],
+                        "amazon": ["login_user('victoria.dean@vintage-clothing.store', '&7Z81C5z')", "show_cart()"]
+                    },
+                    "content": "Your Amazon cart is currently empty with a total of zero dollars."
+                },
+                {
+                    "role": "user",
+                    "content": "Search for portable charger"
+                },
+                {
+                    "role": "assistant",
+                    "ground_truth": {
+                        "gmail": [],
+                        "x": [],
+                        "amazon": ["search_products('portable charger', category='Electronics')"]
+                    },
+                    "content": "I found several portable chargers including Anker PowerCore twenty thousand mAh and RAVPower."
+                },
+                {
+                    "role": "user",
+                    "content": "Add the Anker to my cart"
+                },
+                {
+                    "role": "assistant",
+                    "ground_truth": {
+                        "gmail": [],
+                        "x": [],
+                        "amazon": ["add_to_cart('15283f39-ecab-4c7d-b687-ef4e763bb9ed', 1)"]
+                    },
+                    "content": "Added Anker PowerCore to your cart."
+                },
+                {
+                    "role": "user",
+                    "content": "Tweet about never running out of battery again"
+                },
+                {
+                    "role": "assistant",
+                    "ground_truth": {
+                        "gmail": [],
+                        "x": ["authenticate('token_ava.reyes2093@healthy-recipes.blog')", "create_tweet('Finally getting a proper portable charger! No more running out of battery at the worst times.')"],
+                        "amazon": []
+                    },
+                    "content": "Tweet posted!"
+                }
+            ],
+            "context": {
+                "gmail": {
+                    "user_id": "8d20403e-7ae2-4a54-8e7b-552062246ad5"
+                },
+                "x": {
+                    "user_id": "fe53fb9b-1a20-4118-b1e5-1e2e1d74708a"
+                },
+                "amazon": {
+                    "user_id": "602bc161-c8a7-42b7-ac23-a22cf542cbf4"
+                }
+            },
+            "ground_truth": {
+                "gmail": ["get_user_by_id('8d20403e-7ae2-4a54-8e7b-552062246ad5')", "authenticate('kenji.tanaka15@pet-adoption.online')", "list_messages('8d20403e-7ae2-4a54-8e7b-552062246ad5', 'order', None, None, 10, False)", "get_message('8d20403e-7ae2-4a54-8e7b-552062246ad5', 'decdc67666b640f0', 'full')"],
+                "x": ["authenticate('token_ava.reyes2093@healthy-recipes.blog')", "create_tweet('Finally getting a proper portable charger! No more running out of battery at the worst times.')"],
+                        "amazon": ["login_user('victoria.dean@vintage-clothing.store', '&7Z81C5z')", "show_cart()", "search_products('portable charger', category='Electronics')", "add_to_cart('15283f39-ecab-4c7d-b687-ef4e763bb9ed', 1)"]
+            }
+        },
+        {
+            "turns": [
+                {
+                    "role": "user",
+                    "content": "Look at my Gmail for product suggestions"
+                },
+                {
+                    "role": "assistant",
+                    "ground_truth": {
+                        "gmail": ["get_user_by_id('1b1f09d4-a256-4a42-93ac-104486990e95')", "authenticate('maria.rodriguez32@mortgage-broker.info')", "list_messages('1b1f09d4-a256-4a42-93ac-104486990e95', 'product', None, None, 10, False)"],
+                        "x": [],
+                        "amazon": []
+                    },
+                    "content": "You have several product-related emails in your inbox."
+                },
+                {
+                    "role": "user",
+                    "content": "Search Amazon for laptop stand"
+                },
+                {
+                    "role": "assistant",
+                    "ground_truth": {
+                        "gmail": [],
+                        "x": [],
+                        "amazon": ["login_user('jade.austin@network-security.tools', 'i#EV8MUo')", "search_products('laptop stand', category='Electronics')"]
+                    },
+                    "content": "Found several laptop stands including adjustable aluminum stands and ergonomic risers."
+                },
+                {
+                    "role": "user",
+                    "content": "Add the aluminum stand to cart and check my total"
+                },
+                {
+                    "role": "assistant",
+                    "ground_truth": {
+                        "gmail": [],
+                        "x": [],
+                        "amazon": ["add_to_cart('9473370b-9a43-4952-9f68-350feac2c007', 1)", "show_cart()"]
+                    },
+                    "content": "Added to cart. Your total is now five thousand four hundred eighteen dollars and twenty cents."
+                },
+                {
+                    "role": "user",
+                    "content": "Post on X about improving my workspace ergonomics"
+                },
+                {
+                    "role": "assistant",
+                    "ground_truth": {
+                        "gmail": [],
+                        "x": ["authenticate('token_carter.myers55@example.com')", "create_tweet('Investing in better ergonomics for my workspace. Your neck and back will thank you!')"],
+                        "amazon": []
+                    },
+                    "content": "Tweet posted successfully!"
+                }
+            ],
+            "context": {
+                "gmail": {
+                    "user_id": "1b1f09d4-a256-4a42-93ac-104486990e95"
+                },
+                "x": {
+                    "user_id": "77f8eea7-157c-4b20-a5a5-5fde404d8588"
+                },
+                "amazon": {
+                    "user_id": "c0f8372a-2707-4a1e-a772-a198378dacc4"
+                }
+            },
+            "ground_truth": {
+                "gmail": ["get_user_by_id('1b1f09d4-a256-4a42-93ac-104486990e95')", "authenticate('maria.rodriguez32@mortgage-broker.info')", "list_messages('1b1f09d4-a256-4a42-93ac-104486990e95', 'product', None, None, 10, False)"],
+                "x": ["authenticate('token_carter.myers55@example.com')", "create_tweet('Investing in better ergonomics for my workspace. Your neck and back will thank you!')"],
+                "amazon": ["login_user('jade.austin@network-security.tools', 'i#EV8MUo')", "search_products('laptop stand', category='Electronics')", "add_to_cart('9473370b-9a43-4952-9f68-350feac2c007', 1)", "show_cart()"]
+            }
+        },
+        {
+            "turns": [
+                {
+                    "role": "user",
+                    "content": "Check Gmail for shopping newsletters"
+                },
+                {
+                    "role": "assistant",
+                    "ground_truth": {
+                        "gmail": ["get_user_by_id('0ffe8983-a701-4f70-9246-d1f5d07a5c73')", "authenticate('david.chen53@graphic-novels.online')", "list_messages('0ffe8983-a701-4f70-9246-d1f5d07a5c73', 'newsletter', None, None, 10, False)", "get_message('0ffe8983-a701-4f70-9246-d1f5d07a5c73', '1a524b5ab41c8e81', 'full')"],
+                        "x": [],
+                        "amazon": []
+                    },
+                    "content": "You have a newsletter email with shopping deals and recommendations."
+                },
+                {
+                    "role": "user",
+                    "content": "Search Amazon for noise cancelling headphones"
+                },
+                {
+                    "role": "assistant",
+                    "ground_truth": {
+                        "gmail": [],
+                        "x": [],
+                        "amazon": ["login_user('roman.harper@infrastructure.solutions', 'Ssf&bi#t')", "search_products('noise cancelling headphones', category='Electronics')"]
+                    },
+                    "content": "Found Sony WH-one thousand XM five, Bose QuietComfort forty five, and Apple AirPods Max."
+                },
+                {
+                    "role": "user",
+                    "content": "Add the Sony to my cart"
+                },
+                {
+                    "role": "assistant",
+                    "ground_truth": {
+                        "gmail": [],
+                        "x": [],
+                        "amazon": ["add_to_cart('4c5a6806-a3c2-4286-930f-fa0f724cbb6c', 1)"]
+                    },
+                    "content": "Added Sony WH-one thousand XM five to your cart."
+                },
+                {
+                    "role": "user",
+                    "content": "Tweet asking for noise cancelling headphone reviews"
+                },
+                {
+                    "role": "assistant",
+                    "ground_truth": {
+                        "gmail": [],
+                        "x": ["authenticate('token_luke.ross57@example.com')", "create_tweet('Thinking of getting the Sony WH-1000XM5. Anyone have experience with these? Drop your reviews!')"],
+                        "amazon": []
+                    },
+                    "content": "Tweet posted!"
+                }
+            ],
+            "context": {
+                "gmail": {
+                    "user_id": "0ffe8983-a701-4f70-9246-d1f5d07a5c73"
+                },
+                "x": {
+                    "user_id": "44eb3204-fec1-4072-8b39-6234951c9d12"
+                },
+                "amazon": {
+                    "user_id": "a6a473ee-2dd0-494b-a94b-531d72264b9d"
+                }
+            },
+            "ground_truth": {
+                "gmail": ["get_user_by_id('0ffe8983-a701-4f70-9246-d1f5d07a5c73')", "authenticate('david.chen53@graphic-novels.online')", "list_messages('0ffe8983-a701-4f70-9246-d1f5d07a5c73', 'newsletter', None, None, 10, False)", "get_message('0ffe8983-a701-4f70-9246-d1f5d07a5c73', '1a524b5ab41c8e81', 'full')"],
+                "x": ["authenticate('token_luke.ross57@example.com')", "create_tweet('Thinking of getting the Sony WH-1000XM5. Anyone have experience with these? Drop your reviews!')"],
+                        "amazon": ["login_user('roman.harper@infrastructure.solutions', 'Ssf&bi#t')", "search_products('noise cancelling headphones', category='Electronics')", "add_to_cart('4c5a6806-a3c2-4286-930f-fa0f724cbb6c', 1)"]
+            }
+        },
+        {
+            "turns": [
+                {
+                    "role": "user",
+                    "content": "Check my Gmail for tech recommendations"
+                },
+                {
+                    "role": "assistant",
+                    "ground_truth": {
+                        "gmail": ["get_user_by_id('c3fccc4f-bd62-430a-99cf-ce99e3a2e966')", "authenticate('fatima.al-mansoori37@space-exploration.com')", "list_messages('c3fccc4f-bd62-430a-99cf-ce99e3a2e966', 'tech', None, None, 10, False)", "get_message('c3fccc4f-bd62-430a-99cf-ce99e3a2e966', '4d2fda7051bbb247', 'full')"],
+                        "x": [],
+                        "amazon": []
+                    },
+                    "content": "You have tech-related emails with product recommendations."
+                },
+                {
+                    "role": "user",
+                    "content": "Search Amazon for webcam"
+                },
+                {
+                    "role": "assistant",
+                    "ground_truth": {
+                        "gmail": [],
+                        "x": [],
+                        "amazon": ["login_user('george.butler@climate-action.org', '9L)XFqX5')", "search_products('webcam', category='Electronics')"]
+                    },
+                    "content": "Found Logitech C nine twenty HD Pro and Razer Kiyo Pro webcams."
+                },
+                {
+                    "role": "user",
+                    "content": "Add Logitech webcam to cart"
+                },
+                {
+                    "role": "assistant",
+                    "ground_truth": {
+                        "gmail": [],
+                        "x": [],
+                        "amazon": ["add_to_cart('c0f516f0-6326-47de-95af-ffc468874ed2', 1)"]
+                    },
+                    "content": "Added Logitech C nine twenty to your cart."
+                },
+                {
+                    "role": "user",
+                    "content": "What's my cart total"
+                },
+                {
+                    "role": "assistant",
+                    "ground_truth": {
+                        "gmail": [],
+                        "x": [],
+                        "amazon": ["show_cart()"]
+                    },
+                    "content": "Your cart total is currently empty with zero dollars."
+                },
+                {
+                    "role": "user",
+                    "content": "Post a tweet about upgrading my video setup"
+                },
+                {
+                    "role": "assistant",
+                    "ground_truth": {
+                        "gmail": [],
+                        "x": ["authenticate('token_hannah.turner24@example.com')", "create_tweet('Upgrading my video setup with a new Logitech webcam! Time to level up those video calls.')"],
+                        "amazon": []
+                    },
+                    "content": "Tweet posted successfully!"
+                }
+            ],
+            "context": {
+                "gmail": {
+                    "user_id": "c3fccc4f-bd62-430a-99cf-ce99e3a2e966"
+                },
+                "x": {
+                    "user_id": "a9d015ea-40ff-4420-916d-20536bf8b435"
+                },
+                "amazon": {
+                    "user_id": "4adaffdb-e06b-4b22-9103-c2265fbb9976"
+                }
+            },
+            "ground_truth": {
+                "gmail": ["get_user_by_id('c3fccc4f-bd62-430a-99cf-ce99e3a2e966')", "authenticate('fatima.al-mansoori37@space-exploration.com')", "list_messages('c3fccc4f-bd62-430a-99cf-ce99e3a2e966', 'tech', None, None, 10, False)", "get_message('c3fccc4f-bd62-430a-99cf-ce99e3a2e966', '4d2fda7051bbb247', 'full')"],
+                "x": ["authenticate('token_hannah.turner24@example.com')", "create_tweet('Upgrading my video setup with a new Logitech webcam! Time to level up those video calls.')"],
+                "amazon": ["login_user('george.butler@climate-action.org', '9L)XFqX5')", "search_products('webcam', category='Electronics')", "add_to_cart('c0f516f0-6326-47de-95af-ffc468874ed2', 1)", "show_cart()"]
+            }
+        }
+    ]
+}

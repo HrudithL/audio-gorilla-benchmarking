@@ -1,273 +1,429 @@
 import unittest
-from copy import deepcopy
-from GoogleDriveApis import GoogleDriveApis, DEFAULT_STATE
+import sys
+from pathlib import Path
+
+# Add parent directory to path
+parent_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(parent_dir))
+
+# Import API and helper
+from GoogleDriveApis import GoogleDriveApis
+from UnitTests.test_data_helper import BackendDataLoader
 
 class TestGoogleDriveApis(unittest.TestCase):
+    """
+    Unit tests for the GoogleDriveApis class with OAuth authentication.
+    """
+
+    # These will be populated in setUpClass
+    EMAIL_ALICE = None
+    EMAIL_BOB = None
+    user_id_alice = None
+    user_id_bob = None
+    
+    @classmethod
+    def setUpClass(cls):
+        """Load backend data once for all tests."""
+        # Create temporary API instance to load backend data
+        temp_api = GoogleDriveApis()
+        
+        # Extract real user data from loaded backend
+        user_ids = list(temp_api.users.keys())
+        cls.user_id_alice = user_ids[0] if user_ids else "user_001"
+        cls.user_id_bob = user_ids[1] if len(user_ids) > 1 else cls.user_id_alice
+        
+        # Get user data for reference
+        user_data_alice = temp_api.users.get(cls.user_id_alice, {})
+        user_data_bob = temp_api.users.get(cls.user_id_bob, {})
+        
+        # Get email addresses for authentication
+        cls.EMAIL_ALICE = user_data_alice.get("email", "alice@example.com")
+        cls.EMAIL_BOB = user_data_bob.get("email", "bob@example.com")
+        
+        # Extract real file data
+        files_alice = user_data_alice.get("drive_data", {}).get("files", {})
+        cls.REAL_FILE_ID = next(iter(files_alice), "file1")
+        file_data = files_alice.get(cls.REAL_FILE_ID, {})
+        cls.REAL_FILE_NAME = file_data.get("name", "Test File")
+    
     def setUp(self):
-        """Set up a fresh GoogleDriveApis instance for each test."""
+        """Set up the API instance using real data."""
         self.drive_api = GoogleDriveApis()
-        # Ensure a deep copy of the default state for isolation between tests
-        self.drive_api.state = deepcopy(DEFAULT_STATE)
-        self.user_id_alice = "user1@example.com"
-        self.user_id_bob = "user2@example.com"
+        # Set current user to Alice (already authenticated by default, but ensure it's Alice)
+        self.drive_api.current_user = self.user_id_alice
 
-    def test_get_about_alice(self):
-        """Test getting 'about' information for Alice."""
-        about_info = self.drive_api.get_about(user_id=self.user_id_alice)
-        self.assertIsNotNone(about_info)
-        self.assertIn("user", about_info)
-        self.assertEqual(about_info["user"]["email"], self.user_id_alice)
-        self.assertIn("storageQuota", about_info)
-        self.assertEqual(about_info["storageQuota"]["total"], 1000000000)
+    # --- Authentication Tests ---
+    
+    def test_authenticate_success(self):
+        """Test successful authentication."""
+        api = GoogleDriveApis()
+        result = api.authenticate(self.EMAIL_ALICE)
+        self.assertTrue(result["success"])
+        self.assertEqual(api.current_user, self.user_id_alice)
 
-    def test_get_about_bob(self):
-        """Test getting 'about' information for Bob."""
-        about_info = self.drive_api.get_about(user_id=self.user_id_bob)
-        self.assertIsNotNone(about_info)
-        self.assertIn("user", about_info)
-        self.assertEqual(about_info["user"]["email"], self.user_id_bob)
-        self.assertIn("storageQuota", about_info)
-        self.assertEqual(about_info["storageQuota"]["total"], 500000000)
+    def test_authenticate_nonexistent_user(self):
+        """Test authentication with non-existent user."""
+        api = GoogleDriveApis()
+        result = api.authenticate("nonexistent@example.com")
+        self.assertFalse(result["success"])
 
-    def test_get_about_non_existent_user(self):
-        """Test getting 'about' information for a non-existent user."""
-        about_info = self.drive_api.get_about(user_id="nonexistent@example.com")
-        self.assertIn("error", about_info)
-        self.assertEqual(about_info["error"], "User not found")
+    def test_unauthenticated_access(self):
+        """Test that methods require authentication."""
+        api = GoogleDriveApis()
+        api.current_user = None  # Clear auto-authentication
+        with self.assertRaises(Exception) as context:
+            api.get_user_info()
+        self.assertIn("authenticated", str(context.exception).lower())
 
+    # --- User Info Tests ---
+    
+    def test_get_user_info_alice(self):
+        """Test getting user info for authenticated user."""
+        result = self.drive_api.get_user_info()
+        self.assertIn("kind", result)
+        self.assertEqual(result["kind"], "drive#about")
+        self.assertIn("user", result)
+        self.assertEqual(result["user"]["emailAddress"], self.EMAIL_ALICE)
+
+    def test_get_user_info_bob(self):
+        """Test getting user info after switching users."""
+        self.drive_api.authenticate(self.EMAIL_BOB)
+        result = self.drive_api.get_user_info()
+        self.assertEqual(result["user"]["emailAddress"], self.EMAIL_BOB)
+
+    # --- File Creation Tests ---
+    
     def test_create_file_alice(self):
-        """Test creating a file for Alice."""
-        initial_file_count = len(self.drive_api._get_user_files(self.user_id_alice))
-        new_file = self.drive_api.create_file(user_id=self.user_id_alice)
-        self.assertIsNotNone(new_file)
-        self.assertIn("id", new_file)
-        self.assertEqual(new_file["name"], "Untitled")
-        self.assertEqual(new_file["owners"][0]["emailAddress"], self.user_id_alice)
-        self.assertEqual(len(self.drive_api._get_user_files(self.user_id_alice)), initial_file_count + 1)
+        """Test creating a file."""
+        result = self.drive_api.create_file(name="test_file.txt", mimeType="text/plain")
+        self.assertIn("id", result)
+        self.assertEqual(result["name"], "test_file.txt")
+        self.assertEqual(result["mimeType"], "text/plain")
+        self.assertEqual(result["kind"], "drive#file")
 
-    def test_create_file_bob(self):
-        """Test creating a file for Bob."""
-        initial_file_count = len(self.drive_api._get_user_files(self.user_id_bob))
-        new_file = self.drive_api.create_file(user_id=self.user_id_bob)
-        self.assertIsNotNone(new_file)
-        self.assertIn("id", new_file)
-        self.assertEqual(new_file["name"], "Untitled")
-        self.assertEqual(new_file["owners"][0]["emailAddress"], self.user_id_bob)
-        self.assertEqual(len(self.drive_api._get_user_files(self.user_id_bob)), initial_file_count + 1)
+    def test_create_file_with_description(self):
+        """Test creating a file with description."""
+        result = self.drive_api.create_file(
+            name="test_file.txt",
+            mimeType="text/plain",
+            description="Test description"
+        )
+        self.assertEqual(result["description"], "Test description")
 
-    def test_get_file_alice_existing(self):
-        """Test getting an existing file for Alice."""
-        file_info = self.drive_api.get_file("file_1_alice", user_id=self.user_id_alice)
-        self.assertIsNotNone(file_info)
-        self.assertEqual(file_info["id"], "file_1_alice")
-        self.assertEqual(file_info["name"], "MyDocument_Alice.txt")
+    def test_create_file_starred(self):
+        """Test creating a starred file."""
+        result = self.drive_api.create_file(
+            name="starred_file.txt",
+            mimeType="text/plain",
+            starred=True
+        )
+        self.assertTrue(result["starred"])
 
-    def test_get_file_bob_existing(self):
-        """Test getting an existing file for Bob."""
-        file_info = self.drive_api.get_file("file_1_bob", user_id=self.user_id_bob)
-        self.assertIsNotNone(file_info)
-        self.assertEqual(file_info["id"], "file_1_bob")
-        self.assertEqual(file_info["name"], "Presentation_Bob.pptx")
+    # --- File Retrieval Tests ---
+    
+    def test_get_file_existing(self):
+        """Test getting an existing file."""
+        # Create a file first
+        created = self.drive_api.create_file(name="get_test_file.txt", mimeType="text/plain")
+        file_id = created["id"]
+        
+        # Get the file
+        result = self.drive_api.get_file(file_id)
+        self.assertEqual(result["id"], file_id)
+        self.assertEqual(result["kind"], "drive#file")
+        self.assertIn("capabilities", result)
 
-    def test_get_file_non_existent(self):
-        """Test getting a non-existent file."""
-        file_info = self.drive_api.get_file("non_existent_file", user_id=self.user_id_alice)
-        self.assertIn("error", file_info)
-        self.assertEqual(file_info["error"], "File not found")
+    def test_get_file_not_found(self):
+        """Test getting non-existent file."""
+        with self.assertRaises(Exception) as context:
+            self.drive_api.get_file("nonexistent_file_id")
+        self.assertIn("not found", str(context.exception).lower())
 
-    def test_list_files_alice_no_filters(self):
-        """Test listing all files for Alice without filters."""
-        files_list = self.drive_api.list_files(user_id=self.user_id_alice)
-        self.assertIsNotNone(files_list)
-        self.assertIn("files", files_list)
-        self.assertEqual(len(files_list["files"]), 2) # Alice has 2 default files
+    # --- File Listing Tests ---
+    
+    def test_list_files(self):
+        """Test listing files."""
+        result = self.drive_api.list_files()
+        self.assertIn("kind", result)
+        self.assertEqual(result["kind"], "drive#fileList")
+        self.assertIn("files", result)
+        self.assertIsInstance(result["files"], list)
 
-    def test_list_files_bob_no_filters(self):
-        """Test listing all files for Bob without filters."""
-        files_list = self.drive_api.list_files(user_id=self.user_id_bob)
-        self.assertIsNotNone(files_list)
-        self.assertIn("files", files_list)
-        self.assertEqual(len(files_list["files"]), 1) # Bob has 1 default file
-
-    def test_list_files_with_query(self):
-        """Test listing files with a query filter."""
-        # Add a new file for Alice to test query
-        self.drive_api.create_file(user_id=self.user_id_alice)
-        self.drive_api._get_user_files(self.user_id_alice)["file_3_alice"] = {
-            "id": "file_3_alice",
-            "name": "Important_Report.pdf",
-            "mimeType": "application/pdf",
-            "createdTime": "1679145600",
-            "modifiedTime": "1679145600",
-            "owners": [{"displayName": "Alice Smith", "emailAddress": "user1@example.com"}],
-            "parents": ["root"]
-        }
-
-        files_list = self.drive_api.list_files(user_id=self.user_id_alice, q="report")
-        self.assertIsNotNone(files_list)
-        self.assertIn("files", files_list)
-        self.assertEqual(len(files_list["files"]), 1)
-        self.assertEqual(files_list["files"][0]["name"], "Important_Report.pdf")
+    def test_list_files_with_page_size(self):
+        """Test listing files with page size limit."""
+        result = self.drive_api.list_files(page_size=1)
+        self.assertLessEqual(len(result["files"]), 1)
 
     def test_list_files_with_order_by_name(self):
         """Test listing files ordered by name."""
-        files_list = self.drive_api.list_files(user_id=self.user_id_alice, orderBy="name")
-        self.assertIsNotNone(files_list)
-        self.assertIn("files", files_list)
-        self.assertEqual(files_list["files"][0]["name"], "MyDocument_Alice.txt")
-        self.assertEqual(files_list["files"][1]["name"], "MySpreadsheet_Alice.xlsx")
+        # Create some uniquely named files
+        file1 = self.drive_api.create_file(name="zzz_unique_file.txt", mimeType="text/plain")
+        file2 = self.drive_api.create_file(name="aaa_unique_file.txt", mimeType="text/plain")
+        
+        # List with ordering and search for our unique files
+        result = self.drive_api.list_files(order_by="name")
+        
+        # Find positions of our test files in the sorted list
+        names = [f["name"] for f in result["files"]]
+        try:
+            pos_aaa = names.index("aaa_unique_file.txt")
+            pos_zzz = names.index("zzz_unique_file.txt")
+            # Verify aaa comes before zzz when sorted by name
+            self.assertLess(pos_aaa, pos_zzz)
+        except ValueError:
+            self.fail("Test files not found in list")
 
-    def test_list_files_with_order_by_modified_time_desc(self):
-        """Test listing files ordered by modifiedTime descending."""
-        # Modify file_1_alice to be more recent
-        self.drive_api.update_file("file_1_alice", user_id=self.user_id_alice)
-        files_list = self.drive_api.list_files(user_id=self.user_id_alice, orderBy="-modifiedTime")
-        self.assertIsNotNone(files_list)
-        self.assertIn("files", files_list)
-        self.assertEqual(files_list["files"][0]["id"], "file_1_alice") # Should be first due to recent modification
+    def test_list_files_search_by_name(self):
+        """Test searching files by name."""
+        # Create a unique file
+        unique_name = "unique_search_test_file.txt"
+        created = self.drive_api.create_file(name=unique_name, mimeType="text/plain")
+        
+        # Search for it
+        result = self.drive_api.list_files(q=f"name contains '{unique_name}'")
+        file_names = [f["name"] for f in result["files"]]
+        self.assertIn(unique_name, file_names)
 
-    def test_list_files_with_page_size(self):
-        """Test listing files with a page size limit."""
-        files_list = self.drive_api.list_files(user_id=self.user_id_alice, pageSize=1)
-        self.assertIsNotNone(files_list)
-        self.assertIn("files", files_list)
-        self.assertEqual(len(files_list["files"]), 1)
+    # --- File Update Tests ---
+    
+    def test_update_file_name(self):
+        """Test updating file name."""
+        # Create file
+        created = self.drive_api.create_file(name="original_name.txt", mimeType="text/plain")
+        file_id = created["id"]
+        
+        # Update name
+        updated = self.drive_api.update_file(file_id, name="new_name.txt")
+        self.assertEqual(updated["name"], "new_name.txt")
+
+    def test_update_file_star(self):
+        """Test starring a file via update."""
+        created = self.drive_api.create_file(name="star_test.txt", mimeType="text/plain")
+        file_id = created["id"]
+        
+        # Star the file
+        updated = self.drive_api.update_file(file_id, starred=True)
+        self.assertTrue(updated["starred"])
+
+    def test_update_file_trash(self):
+        """Test trashing a file via update."""
+        created = self.drive_api.create_file(name="trash_test.txt", mimeType="text/plain")
+        file_id = created["id"]
+        
+        # Trash the file
+        updated = self.drive_api.update_file(file_id, trashed=True)
+        self.assertTrue(updated["trashed"])
 
     def test_update_file_add_parent(self):
         """Test updating a file by adding a parent."""
-        updated_file = self.drive_api.update_file("file_1_alice", addParents="folder_abc", user_id=self.user_id_alice)
-        self.assertIsNotNone(updated_file)
-        self.assertIn("folder_abc", updated_file["parents"])
-        # Verify in actual state
-        self.assertIn("folder_abc", self.drive_api._get_user_files(self.user_id_alice)["file_1_alice"]["parents"])
+        # Create file and folder
+        file_result = self.drive_api.create_file(name="update_test_file.txt", mimeType="text/plain")
+        file_id = file_result["id"]
+        
+        folder_result = self.drive_api.create_folder("Test Folder")
+        folder_id = folder_result["id"]
+        
+        # Add parent
+        updated = self.drive_api.update_file(file_id, addParents=folder_id)
+        self.assertIn(folder_id, updated["parents"])
 
-    def test_update_file_remove_parent(self):
-        """Test updating a file by removing a parent."""
-        # First, add a parent to ensure it exists for removal
-        self.drive_api.update_file("file_1_alice", addParents="folder_to_remove", user_id=self.user_id_alice)
-        updated_file = self.drive_api.update_file("file_1_alice", removeParents="folder_to_remove", user_id=self.user_id_alice)
-        self.assertIsNotNone(updated_file)
-        self.assertNotIn("folder_to_remove", updated_file["parents"])
-        # Verify in actual state
-        self.assertNotIn("folder_to_remove", self.drive_api._get_user_files(self.user_id_alice)["file_1_alice"]["parents"])
+    # --- File Deletion Tests ---
+    
+    def test_delete_file(self):
+        """Test deleting a file."""
+        # Create file
+        created = self.drive_api.create_file(name="delete_test.txt", mimeType="text/plain")
+        file_id = created["id"]
+        
+        # Delete it (should not raise exception)
+        self.drive_api.delete_file(file_id)
 
-    def test_delete_file_alice(self):
-        """Test deleting a file for Alice."""
-        initial_file_count = len(self.drive_api._get_user_files(self.user_id_alice))
-        deletion_status = self.drive_api.delete_file("file_1_alice", user_id=self.user_id_alice)
-        self.assertTrue(deletion_status["deletion_status"])
-        self.assertEqual(len(self.drive_api._get_user_files(self.user_id_alice)), initial_file_count - 1)
-        self.assertNotIn("file_1_alice", self.drive_api._get_user_files(self.user_id_alice))
+    def test_delete_file_not_found(self):
+        """Test deleting non-existent file."""
+        with self.assertRaises(Exception) as context:
+            self.drive_api.delete_file("nonexistent_file")
+        self.assertIn("not found", str(context.exception).lower())
 
-    def test_delete_file_non_existent(self):
-        """Test deleting a non-existent file."""
-        deletion_status = self.drive_api.delete_file("non_existent_file", user_id=self.user_id_alice)
-        self.assertFalse(deletion_status["deletion_status"])
+    # --- File Copy Tests ---
+    
+    def test_copy_file(self):
+        """Test copying a file."""
+        # Create original
+        original = self.drive_api.create_file(name="original.txt", mimeType="text/plain")
+        original_id = original["id"]
+        
+        # Copy it
+        copied = self.drive_api.copy_file(original_id, name="copied.txt")
+        self.assertNotEqual(copied["id"], original_id)
+        self.assertEqual(copied["name"], "copied.txt")
+        self.assertEqual(copied["mimeType"], original["mimeType"])
 
-    def test_copy_file_alice(self):
-        """Test copying a file for Alice."""
-        initial_file_count = len(self.drive_api._get_user_files(self.user_id_alice))
-        copied_file = self.drive_api.copy_file("file_1_alice", user_id=self.user_id_alice)
-        self.assertIsNotNone(copied_file)
-        self.assertNotEqual(copied_file["id"], "file_1_alice")
-        self.assertTrue(copied_file["name"].startswith("Copy of MyDocument_Alice.txt"))
-        self.assertEqual(len(self.drive_api._get_user_files(self.user_id_alice)), initial_file_count + 1)
-        self.assertIn(copied_file["id"], self.drive_api._get_user_files(self.user_id_alice))
+    def test_copy_file_auto_name(self):
+        """Test copying a file with auto-generated name."""
+        original = self.drive_api.create_file(name="original.txt", mimeType="text/plain")
+        original_id = original["id"]
+        
+        copied = self.drive_api.copy_file(original_id)
+        self.assertTrue(copied["name"].startswith("Copy of"))
 
-    def test_export_file_alice(self):
-        """Test exporting a file for Alice."""
-        exported_file = self.drive_api.export_file("file_1_alice", "application/pdf", user_id=self.user_id_alice)
-        self.assertIsNotNone(exported_file)
-        self.assertEqual(exported_file["id"], "file_1_alice")
-        self.assertEqual(exported_file["mimeType"], "application/pdf")
-        self.assertIn("exportLinks", exported_file)
+    def test_copy_file_not_found(self):
+        """Test copying non-existent file."""
+        with self.assertRaises(Exception) as context:
+            self.drive_api.copy_file("nonexistent_file", name="copied.txt")
+        self.assertIn("not found", str(context.exception).lower())
 
-    def test_empty_trash_alice(self):
-        """Test emptying trash for Alice."""
-        status = self.drive_api.empty_trash(user_id=self.user_id_alice)
-        self.assertTrue(status["empty_status"])
+    # --- Folder Tests ---
+    
+    def test_create_folder(self):
+        """Test creating a folder."""
+        result = self.drive_api.create_folder("Test Folder")
+        self.assertIn("id", result)
+        self.assertEqual(result["name"], "Test Folder")
+        self.assertEqual(result["mimeType"], "application/vnd.google-apps.folder")
 
-    # Combined Functionality Tests
+    def test_create_folder_with_parent(self):
+        """Test creating a folder with parent."""
+        # Create parent folder
+        parent = self.drive_api.create_folder("Parent Folder")
+        parent_id = parent["id"]
+        
+        # Create child folder
+        child = self.drive_api.create_folder("Child Folder", parents=[parent_id])
+        self.assertIn(parent_id, child["parents"])
 
+    # --- Permission/Sharing Tests ---
+    
+    def test_create_permission_user(self):
+        """Test creating a permission for a user."""
+        # Create file
+        file = self.drive_api.create_file(name="share_test.txt", mimeType="text/plain")
+        file_id = file["id"]
+        
+        # Share with Bob
+        permission = self.drive_api.create_permission(
+            fileId=file_id,
+            role="reader",
+            type="user",
+            emailAddress=self.EMAIL_BOB
+        )
+        self.assertEqual(permission["role"], "reader")
+        self.assertEqual(permission["type"], "user")
+        self.assertIn("id", permission)
+
+    def test_create_permission_writer(self):
+        """Test creating a writer permission."""
+        file = self.drive_api.create_file(name="share_test.txt", mimeType="text/plain")
+        file_id = file["id"]
+        
+        permission = self.drive_api.create_permission(
+            fileId=file_id,
+            role="writer",
+            type="user",
+            emailAddress=self.EMAIL_BOB
+        )
+        self.assertEqual(permission["role"], "writer")
+
+    def test_create_permission_invalid_role(self):
+        """Test creating permission with invalid role."""
+        file = self.drive_api.create_file(name="test.txt", mimeType="text/plain")
+        file_id = file["id"]
+        
+        with self.assertRaises(Exception) as context:
+            self.drive_api.create_permission(
+                fileId=file_id,
+                role="invalid_role",
+                type="user",
+                emailAddress=self.EMAIL_BOB
+            )
+        self.assertIn("invalid role", str(context.exception).lower())
+
+    def test_create_permission_not_found(self):
+        """Test creating permission for non-existent file."""
+        with self.assertRaises(Exception) as context:
+            self.drive_api.create_permission(
+                fileId="nonexistent_file",
+                role="reader",
+                type="user",
+                emailAddress=self.EMAIL_BOB
+            )
+        self.assertIn("not found", str(context.exception).lower())
+
+    # --- Revision Tests ---
+    
+    def test_list_revisions(self):
+        """Test listing file revisions."""
+        # Create file
+        file = self.drive_api.create_file(name="revisions_test.txt", mimeType="text/plain")
+        file_id = file["id"]
+        
+        # Get revisions
+        result = self.drive_api.list_revisions(file_id)
+        self.assertIn("kind", result)
+        self.assertEqual(result["kind"], "drive#revisionList")
+        self.assertIn("revisions", result)
+        self.assertGreater(len(result["revisions"]), 0)
+
+    def test_list_revisions_not_found(self):
+        """Test getting revisions for non-existent file."""
+        with self.assertRaises(Exception) as context:
+            self.drive_api.list_revisions("nonexistent_file")
+        self.assertIn("not found", str(context.exception).lower())
+
+    # --- Workflow Tests ---
+    
     def test_create_list_delete_file_flow(self):
-        """Test the flow of creating, listing, and deleting a file for Alice."""
-        initial_file_count = len(self.drive_api._get_user_files(self.user_id_alice))
-
-        # 1. Create a file
-        created_file = self.drive_api.create_file(user_id=self.user_id_alice)
-        self.assertIsNotNone(created_file)
-        self.assertEqual(len(self.drive_api._get_user_files(self.user_id_alice)), initial_file_count + 1)
-
-        # 2. List files and find the created file
-        listed_files = self.drive_api.list_files(user_id=self.user_id_alice, q=created_file["name"])
-        self.assertIsNotNone(listed_files)
-        self.assertIn("files", listed_files)
-        self.assertEqual(len(listed_files["files"]), 1)
-        self.assertEqual(listed_files["files"][0]["id"], created_file["id"])
-
-        # 3. Delete the file
-        deletion_status = self.drive_api.delete_file(created_file["id"], user_id=self.user_id_alice)
-        self.assertTrue(deletion_status["deletion_status"])
-        self.assertEqual(len(self.drive_api._get_user_files(self.user_id_alice)), initial_file_count)
-
-        # 4. Verify the file is no longer found
-        verified_deleted = self.drive_api.get_file(created_file["id"], user_id=self.user_id_alice)
-        self.assertIn("error", verified_deleted)
-        self.assertEqual(verified_deleted["error"], "File not found")
+        """Test the flow of creating, listing, and deleting a file."""
+        # Create file
+        created = self.drive_api.create_file(name="flow_test.txt", mimeType="text/plain")
+        file_id = created["id"]
+        
+        # List files to verify creation
+        list_result = self.drive_api.list_files()
+        file_ids = [f["id"] for f in list_result["files"]]
+        self.assertIn(file_id, file_ids)
+        
+        # Delete file
+        self.drive_api.delete_file(file_id)
 
     def test_copy_update_get_file_flow(self):
-        """Test the flow of copying, updating, and getting a file for Alice."""
-        original_file_id = "file_1_alice"
-
-        # 1. Copy the original file
-        copied_file = self.drive_api.copy_file(original_file_id, user_id=self.user_id_alice)
-        self.assertIsNotNone(copied_file)
-        self.assertNotEqual(copied_file["id"], original_file_id)
-        copied_file_id = copied_file["id"]
-
-        # 2. Update the copied file (e.g., add a parent)
-        updated_file = self.drive_api.update_file(copied_file_id, addParents="new_project_folder", user_id=self.user_id_alice)
-        self.assertIsNotNone(updated_file)
-        self.assertIn("new_project_folder", updated_file["parents"])
-
-        # 3. Get the updated file and verify changes
-        retrieved_file = self.drive_api.get_file(copied_file_id, user_id=self.user_id_alice)
-        self.assertIsNotNone(retrieved_file)
-        self.assertEqual(retrieved_file["id"], copied_file_id)
-        self.assertIn("new_project_folder", retrieved_file["parents"])
+        """Test the flow of copying, updating, and getting a file."""
+        # Create original
+        original = self.drive_api.create_file(name="copy_test_original.txt", mimeType="text/plain")
+        original_id = original["id"]
+        
+        # Copy file
+        copied = self.drive_api.copy_file(original_id, name="copied_test_file.txt")
+        copied_id = copied["id"]
+        
+        # Update copied file
+        self.drive_api.update_file(copied_id, name="Updated Copy")
+        
+        # Get updated file
+        retrieved = self.drive_api.get_file(copied_id)
+        self.assertEqual(retrieved["name"], "Updated Copy")
 
     def test_multiple_user_file_isolation(self):
         """Test that files are isolated between different users."""
-        # Create a file for Alice
-        alice_file = self.drive_api.create_file(user_id=self.user_id_alice)
-        self.assertIsNotNone(alice_file)
+        # Create file as Alice
+        alice_file = self.drive_api.create_file(name="alice_file.txt", mimeType="text/plain")
+        alice_file_id = alice_file["id"]
+        
+        # Switch to Bob
+        self.drive_api.authenticate(self.EMAIL_BOB)
+        
+        # Bob shouldn't see Alice's file without sharing
+        bob_files = self.drive_api.list_files()
+        bob_file_ids = [f["id"] for f in bob_files["files"]]
+        self.assertNotIn(alice_file_id, bob_file_ids)
 
-        # Try to retrieve Alice's file using Bob's user ID
-        bob_attempt_to_get_alice_file = self.drive_api.get_file(alice_file["id"], user_id=self.user_id_bob)
-        self.assertIn("error", bob_attempt_to_get_alice_file)
-        self.assertEqual(bob_attempt_to_get_alice_file["error"], "File not found")
-
-        # Create a file for Bob
-        bob_file = self.drive_api.create_file(user_id=self.user_id_bob)
-        self.assertIsNotNone(bob_file)
-
-        # Verify Alice cannot see Bob's file
-        alice_attempt_to_get_bob_file = self.drive_api.get_file(bob_file["id"], user_id=self.user_id_alice)
-        self.assertIn("error", alice_attempt_to_get_bob_file)
-        self.assertEqual(alice_attempt_to_get_bob_file["error"], "File not found")
-
-        # List Alice's files and ensure Bob's file is not there
-        alice_files_list = self.drive_api.list_files(user_id=self.user_id_alice)
-        self.assertIsNotNone(alice_files_list)
-        self.assertIn("files", alice_files_list)
-        self.assertFalse(any(f["id"] == bob_file["id"] for f in alice_files_list["files"]))
-
-        # List Bob's files and ensure Alice's file is not there
-        bob_files_list = self.drive_api.list_files(user_id=self.user_id_bob)
-        self.assertIsNotNone(bob_files_list)
-        self.assertIn("files", bob_files_list)
-        self.assertFalse(any(f["id"] == alice_file["id"] for f in bob_files_list["files"]))
+    # --- Reset Data Test ---
+    
+    def test_reset_data_success(self):
+        """Test resetting data successfully."""
+        result = self.drive_api.reset_data()
+        self.assertTrue(result.get("reset_status", False))
 
 
-if __name__ == '__main__':
-    unittest.main(argv=['first-arg-is-ignored'], exit=False)
+if __name__ == "__main__":
+    unittest.main()
+

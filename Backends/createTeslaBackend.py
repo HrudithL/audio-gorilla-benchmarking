@@ -4,7 +4,7 @@ import uuid
 import json
 import random
 from typing import Dict, Any
-from fake_data import first_names, last_names, domains, playlist_titles, user_count, first_and_last_names
+from fake_data import first_names, last_names, domains, playlist_titles, user_count, first_and_last_names, tesla_superchargers
 
 _initial_user_email_to_uuid_map = {}
 _initial_vehicle_tag_to_uuid_map = {}
@@ -38,7 +38,7 @@ def _convert_initial_data_to_uuids(initial_data: Dict[str, Any]) -> Dict[str, An
                 friend_id for friend_id in user_data["friends"] 
                 if friend_id in converted_data["users"] or friend_id in _initial_user_email_to_uuid_map.values()
             ]
-    for user_original_email, user_original_data in initial_data.get("users", {}).items():
+    for user_original_email in initial_data.get("users", {}):
         user_uuid = _initial_user_email_to_uuid_map[user_original_email]
         user_tesla_data = converted_data["users"][user_uuid].get("tesla_data", {})
         old_vehicles = user_tesla_data.get("vehicles", {})
@@ -84,7 +84,7 @@ def generate_tesla_model():
 def generate_location():
     lat = random.uniform(25.0, 49.0)
     lon = random.uniform(-125.0, -66.0)
-    return {"latitude": round(lat, 4), "longitude": round(lon, 4)}
+    return {"latitude": round(lat, 6), "longitude": round(lon, 6)}
 
 sentry_alerts = [
     "Motion detected near front door", "Object too close to rear bumper",
@@ -201,6 +201,9 @@ for user_id, user_data in DEFAULT_STATE["users"].items():
             elif friend_identifier in DEFAULT_STATE["users"]:
                 updated_friends.append(friend_identifier)
         user_data["friends"] = list(set(updated_friends))
+
+# Add superchargers to the state
+DEFAULT_STATE["superchargers"] = copy.deepcopy(tesla_superchargers)
 
 output_filename = 'diverse_teslafleet_state.json'
 with open(output_filename, 'w') as f:

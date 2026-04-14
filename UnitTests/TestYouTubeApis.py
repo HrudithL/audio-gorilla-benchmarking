@@ -1,299 +1,547 @@
 import unittest
-from copy import deepcopy
-from YouTubeApis import YouTubeApis, DEFAULT_STATE
+import sys
+from pathlib import Path
+
+# Add parent directory to path
+parent_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(parent_dir))
+
+# Import API and helper
+from YouTubeApis import YouTubeApis
+from UnitTests.test_data_helper import BackendDataLoader
 
 class TestYouTubeApis(unittest.TestCase):
+    """
+    Unit tests for the YouTubeApis class using OAuth 2.0 authentication.
+    Tests the YouTube Data API v3 compatible implementation.
+    """
+
+    # Load real data from backend
+    real_data = BackendDataLoader.get_youtube_data()
+    
+    # Extract real user data
+    users = list(real_data.get("users", {}).values())
+    user_data_alice = users[0] if users else {}
+    user_data_bob = users[1] if len(users) > 1 else user_data_alice
+    
+    REAL_USER_ID_ALICE = user_data_alice.get("user_id", "user1")
+    REAL_USER_ID_BOB = user_data_bob.get("user_id", "user2")
+    REAL_EMAIL_ALICE = user_data_alice.get("email", "alice@example.com")
+    REAL_EMAIL_BOB = user_data_bob.get("email", "bob@example.com")
+    
+    # Extract real channel data
+    channels = list(real_data.get("channels", {}).values())
+    channel_data = channels[0] if channels else {}
+    REAL_CHANNEL_ID = next(iter(real_data.get("channels", {})), "channel1")
+    
+    # Extract real video data
+    videos = list(real_data.get("videos", {}).values())
+    video_data = videos[0] if videos else {}
+    REAL_VIDEO_ID = next(iter(real_data.get("videos", {})), "video1")
+    
+    # Extract real playlist data
+    playlists = list(real_data.get("playlists", {}).values())
+    playlist_data = playlists[0] if playlists else {}
+    REAL_PLAYLIST_ID = next(iter(real_data.get("playlists", {})), "playlist1")
+    
     def setUp(self):
-        """Set up a fresh YouTubeApis instance for each test."""
+        """Set up the API instance using real data."""
         self.youtube_api = YouTubeApis()
-        # Ensure a clean state for each test by explicitly loading the default scenario
-        self.youtube_api._load_scenario(deepcopy(DEFAULT_STATE))
+        # Create access tokens for test users
+        self.alice_token = f"token_{self.REAL_EMAIL_ALICE}"
+        self.bob_token = f"token_{self.REAL_EMAIL_BOB}"
 
-    # Unit Tests for Individual Audio/Caption Related Functions
+    # --- Authentication Tests ---
+    def test_authenticate_alice(self):
+        """Test authenticating as Alice."""
+        result = self.youtube_api.authenticate(self.alice_token)
+        self.assertIn("kind", result)
+        self.assertEqual(result["kind"], "youtube#channel")
+        self.assertIn("id", result)
 
-    def test_youtube_captions_insert_success(self):
-        """Test inserting a new caption track successfully."""
-        # Ensure a video exists in the current channel for caption insertion
-        self.youtube_api.current_channel = "channel1@example.com"
-        video_id = "videoABC"
-        initial_caption_count = len(self.youtube_api.channels[self.youtube_api.current_channel].get("captions", {}))
+    def test_authenticate_bob(self):
+        """Test authenticating as Bob."""
+        result = self.youtube_api.authenticate(self.bob_token)
+        self.assertIn("kind", result)
+        self.assertEqual(result["kind"], "youtube#channel")
 
-        result = self.youtube_api.youtube_captions_insert(
-            part="snippet",
-            video_id=video_id,
-            language="es",
-            name="Spanish Captions"
-        )
-        self.assertTrue(result["success"])
-        self.assertIn("caption_id", result)
-        self.assertEqual(result["video_id"], video_id)
-        self.assertEqual(result["language"], "es")
+    def test_authenticate_invalid_token(self):
+        """Test authenticating with invalid token."""
+        with self.assertRaises(Exception) as context:
+            self.youtube_api.authenticate("invalid_token")
+        self.assertIn("Invalid access token", str(context.exception))
 
-        # Verify the caption was added to the channel's captions
-        updated_captions = self.youtube_api.channels[self.youtube_api.current_channel]["captions"]
-        self.assertEqual(len(updated_captions), initial_caption_count + 1)
-        new_caption_id = result["caption_id"]
-        self.assertIn(new_caption_id, updated_captions)
-        self.assertEqual(updated_captions[new_caption_id]["language"], "es")
-        self.assertEqual(updated_captions[new_caption_id]["name"], "Spanish Captions")
+    def test_ensure_authenticated_without_auth(self):
+        """Test that methods requiring auth fail without authentication."""
+        with self.assertRaises(Exception) as context:
+            self.youtube_api.get_my_channel()
+        self.assertIn("Authentication required", str(context.exception))
 
-    def test_youtube_captions_insert_no_current_channel(self):
-        """Test inserting caption without a current channel set."""
-        self.youtube_api.current_channel = None
-        result = self.youtube_api.youtube_captions_insert(
-            part="snippet",
-            video_id="videoABC",
-            language="fr"
-        )
-        self.assertIn("error", result)
-        self.assertEqual(result["error"], "No current channel set.")
+    # --- Channel Tests ---
+    def test_get_my_channel(self):
+        """Test getting authenticated user's channel."""
+        self.youtube_api.authenticate(self.alice_token)
+        result = self.youtube_api.get_my_channel()
+        self.assertIn("kind", result)
+        self.assertEqual(result["kind"], "youtube#channel")
+        self.assertIn("snippet", result)
+        self.assertIn("statistics", result)
 
-    def test_youtube_captions_insert_video_not_found(self):
-        """Test inserting caption for a video that doesn't exist in the current channel."""
-        self.youtube_api.current_channel = "channel1@example.com"
-        result = self.youtube_api.youtube_captions_insert(
-            part="snippet",
-            video_id="nonExistentVideo",
-            language="fr"
-        )
-        self.assertIn("error", result)
-        self.assertEqual(result["error"], "Video not found in current channel.")
-
-    def test_youtube_captions_list_success(self):
-        """Test listing caption tracks for a video."""
-        self.youtube_api.current_channel = "channel1@example.com"
-        video_id = "videoABC"
-        result = self.youtube_api.youtube_captions_list(part="snippet", video_id=video_id)
+    def test_list_my_channels(self):
+        """Test listing all channels owned by authenticated user."""
+        self.youtube_api.authenticate(self.alice_token)
+        result = self.youtube_api.list_my_channels()
+        self.assertIn("kind", result)
+        self.assertEqual(result["kind"], "youtube#channelListResponse")
         self.assertIn("items", result)
         self.assertIsInstance(result["items"], list)
-        self.assertGreater(len(result["items"]), 0)
-        self.assertEqual(result["items"][0]["snippet"]["videoId"], video_id)
-        self.assertEqual(result["items"][0]["snippet"]["language"], "en")
 
-    def test_youtube_captions_list_no_current_channel(self):
-        """Test listing captions without a current channel set."""
-        self.youtube_api.current_channel = None
-        result = self.youtube_api.youtube_captions_list(part="snippet", video_id="videoABC")
-        self.assertIn("error", result)
-        self.assertEqual(result["error"], "No current channel set.")
+    def test_get_channel_public(self):
+        """Test getting channel details (public endpoint)."""
+        result = self.youtube_api.get_channel(self.REAL_CHANNEL_ID)
+        self.assertIn("kind", result)
+        self.assertEqual(result["kind"], "youtube#channel")
+        self.assertIn("id", result)
+        self.assertEqual(result["id"], self.REAL_CHANNEL_ID)
 
-    def test_youtube_captions_list_no_captions_for_video(self):
-        """Test listing captions for a video with no captions."""
-        self.youtube_api.current_channel = "channel2@example.com" # channel2 has no captions
-        result = self.youtube_api.youtube_captions_list(part="snippet", video_id="someVideo")
+    def test_get_channel_non_existent(self):
+        """Test getting non-existent channel."""
+        with self.assertRaises(Exception) as context:
+            self.youtube_api.get_channel("nonexistent_channel")
+        self.assertIn("Channel not found", str(context.exception))
+
+    def test_create_channel(self):
+        """Test creating a new channel."""
+        self.youtube_api.authenticate(self.alice_token)
+        result = self.youtube_api.create_channel(
+            title="Test Channel",
+            description="Test Description"
+        )
+        self.assertIn("kind", result)
+        self.assertEqual(result["kind"], "youtube#channel")
+        self.assertIn("id", result)
+        self.assertEqual(result["snippet"]["title"], "Test Channel")
+
+    def test_update_channel(self):
+        """Test updating a channel."""
+        self.youtube_api.authenticate(self.alice_token)
+        result = self.youtube_api.update_channel(
+            channel_id=self.REAL_CHANNEL_ID,
+            title="Updated Title",
+            description="Updated Description"
+        )
+        self.assertIn("kind", result)
+        self.assertEqual(result["snippet"]["title"], "Updated Title")
+
+    def test_update_channel_not_owner(self):
+        """Test updating channel as non-owner fails."""
+        self.youtube_api.authenticate(self.bob_token)
+        with self.assertRaises(Exception) as context:
+            self.youtube_api.update_channel(
+                channel_id=self.REAL_CHANNEL_ID,
+                title="Hacked Title"
+            )
+        self.assertIn("only the channel owner", str(context.exception).lower())
+
+    # --- Video Tests ---
+    def test_list_channel_videos(self):
+        """Test listing videos in a channel (public endpoint)."""
+        result = self.youtube_api.list_channel_videos(self.REAL_CHANNEL_ID)
+        self.assertIn("kind", result)
+        self.assertEqual(result["kind"], "youtube#videoListResponse")
         self.assertIn("items", result)
-        self.assertEqual(len(result["items"]), 0)
+        self.assertIn("pageInfo", result)
 
-    def test_youtube_captions_update_success(self):
-        """Test updating an existing caption track."""
-        self.youtube_api.current_channel = "channel1@example.com"
-        caption_id = "caption1"
-        new_name = "Updated English Captions"
-        result = self.youtube_api.youtube_captions_update(
-            part="snippet",
-            caption_id=caption_id,
-            is_draft=True,
-            file_path="/new/path/to/captions1.vtt"
+    def test_list_channel_videos_with_pagination(self):
+        """Test listing videos with pagination."""
+        result = self.youtube_api.list_channel_videos(
+            self.REAL_CHANNEL_ID, 
+            maxResults=5
         )
-        self.assertTrue(result["success"])
-        self.assertEqual(result["caption_id"], caption_id)
-        self.assertTrue(self.youtube_api.channels[self.youtube_api.current_channel]["captions"][caption_id]["is_draft"])
-        self.assertEqual(self.youtube_api.channels[self.youtube_api.current_channel]["captions"][caption_id]["file_path"], "/new/path/to/captions1.vtt")
+        self.assertIn("pageInfo", result)
+        self.assertEqual(result["pageInfo"]["resultsPerPage"], 5)
 
-    def test_youtube_captions_update_not_found(self):
-        """Test updating a non-existent caption track."""
-        self.youtube_api.current_channel = "channel1@example.com"
-        result = self.youtube_api.youtube_captions_update(
-            part="snippet",
-            caption_id="nonExistentCaption",
-            is_draft=True
+    def test_get_video(self):
+        """Test getting video details (public endpoint)."""
+        result = self.youtube_api.get_video(self.REAL_VIDEO_ID)
+        self.assertIn("kind", result)
+        self.assertEqual(result["kind"], "youtube#video")
+        self.assertIn("snippet", result)
+        self.assertIn("statistics", result)
+        self.assertIn("contentDetails", result)
+
+    def test_get_video_non_existent(self):
+        """Test getting non-existent video."""
+        with self.assertRaises(Exception) as context:
+            self.youtube_api.get_video("nonexistent_video")
+        self.assertIn("Video not found", str(context.exception))
+
+    def test_upload_video(self):
+        """Test uploading a video."""
+        self.youtube_api.authenticate(self.alice_token)
+        result = self.youtube_api.upload_video(
+            title="Test Video",
+            description="Test Description",
+            duration_seconds=120,
+            tags=["test", "upload"]
         )
-        self.assertIn("error", result)
-        self.assertEqual(result["error"], "Caption track not found.")
+        self.assertIn("kind", result)
+        self.assertEqual(result["kind"], "youtube#video")
+        self.assertIn("id", result)
+        self.assertEqual(result["snippet"]["title"], "Test Video")
 
-    def test_youtube_captions_download_success(self):
-        """Test downloading a caption track."""
-        self.youtube_api.current_channel = "channel1@example.com"
-        caption_id = "caption1"
-        result = self.youtube_api.youtube_captions_download(id=caption_id, tfmt="srt")
-        self.assertTrue(result["success"])
-        self.assertEqual(result["caption_id"], caption_id)
-        self.assertIn("content", result)
-        self.assertIsInstance(result["content"], str)
-        self.assertIn("dummy caption", result["content"])
-
-    def test_youtube_captions_download_not_found(self):
-        """Test downloading a non-existent caption track."""
-        self.youtube_api.current_channel = "channel1@example.com"
-        result = self.youtube_api.youtube_captions_download(id="nonExistentCaption")
-        self.assertIn("error", result)
-        self.assertEqual(result["error"], "Caption track not found.")
-
-    def test_youtube_captions_delete_success(self):
-        """Test deleting a caption track."""
-        self.youtube_api.current_channel = "channel1@example.com"
-        caption_id_to_delete = "caption1"
-        initial_caption_count = len(self.youtube_api.channels[self.youtube_api.current_channel].get("captions", {}))
-
-        result = self.youtube_api.youtube_captions_delete(id=caption_id_to_delete)
-        self.assertTrue(result["success"])
-        self.assertEqual(result["deleted_caption_id"], caption_id_to_delete)
-        self.assertEqual(len(self.youtube_api.channels[self.youtube_api.current_channel]["captions"]), initial_caption_count - 1)
-        self.assertNotIn(caption_id_to_delete, self.youtube_api.channels[self.youtube_api.current_channel]["captions"])
-
-    def test_youtube_captions_delete_not_found(self):
-        """Test deleting a non-existent caption track."""
-        self.youtube_api.current_channel = "channel1@example.com"
-        result = self.youtube_api.youtube_captions_delete(id="nonExistentCaption")
-        self.assertIn("error", result)
-        self.assertEqual(result["error"], "Caption track not found.")
-
-    def test_youtube_videos_rate_success(self):
-        """Test rating a video."""
-        video_id = "videoABC"
-        result = self.youtube_api.youtube_videos_rate(id=video_id, rating="like")
-        self.assertTrue(result["success"])
-        self.assertEqual(result["video_id"], video_id)
-        self.assertEqual(result["rating"], "like")
-
-    def test_youtube_videos_rate_invalid_rating(self):
-        """Test rating a video with an invalid rating."""
-        video_id = "videoABC"
-        result = self.youtube_api.youtube_videos_rate(id=video_id, rating="invalid")
-        self.assertIn("error", result)
-        self.assertEqual(result["error"], "Invalid rating. Must be 'like', 'dislike', or 'none'.")
-
-    def test_youtube_videos_get_rating_success(self):
-        """Test getting a video's rating."""
-        video_id = "videoABC"
-        result = self.youtube_api.youtube_videos_get_rating(id=video_id)
-        self.assertIn("items", result)
-        self.assertIsInstance(result["items"], list)
-        self.assertEqual(len(result["items"]), 1)
-        self.assertEqual(result["items"][0]["videoId"], video_id)
-        self.assertEqual(result["items"][0]["rating"], "none") # Dummy backend always returns 'none'
-
-    # Combined Functionality Tests
-
-    def test_caption_workflow_insert_list_update_delete(self):
-        """
-        Combined test: Insert a caption, list it, update it, and then delete it.
-        """
-        self.youtube_api.current_channel = "channel1@example.com"
-        video_id = "videoABC"
-        initial_caption_count = len(self.youtube_api.channels[self.youtube_api.current_channel].get("captions", {}))
-
-        # 1. Insert a caption
-        insert_result = self.youtube_api.youtube_captions_insert(
-            part="snippet",
-            video_id=video_id,
-            language="fr",
-            name="French Captions for Workflow Test"
-        )
-        self.assertTrue(insert_result["success"])
-        new_caption_id = insert_result["caption_id"]
-        self.assertEqual(len(self.youtube_api.channels[self.youtube_api.current_channel]["captions"]), initial_caption_count + 1)
-
-        # 2. List captions and verify the new caption is present
-        list_result_after_insert = self.youtube_api.youtube_captions_list(part="snippet", video_id=video_id)
-        self.assertTrue(any(item["id"] == new_caption_id for item in list_result_after_insert["items"]))
-
-        # 3. Update the caption
-        update_result = self.youtube_api.youtube_captions_update(
-            part="snippet",
-            caption_id=new_caption_id,
-            is_draft=True
-        )
-        self.assertTrue(update_result["success"])
-        self.assertTrue(self.youtube_api.channels[self.youtube_api.current_channel]["captions"][new_caption_id]["is_draft"])
-
-        # 4. Delete the caption
-        delete_result = self.youtube_api.youtube_captions_delete(id=new_caption_id)
-        self.assertTrue(delete_result["success"])
-        self.assertEqual(self.youtube_api.channels[self.youtube_api.current_channel]["captions"].get(new_caption_id), None)
-        self.assertEqual(len(self.youtube_api.channels[self.youtube_api.current_channel]["captions"]), initial_caption_count)
-
-        # 5. Verify it's no longer in the list
-        list_result_after_delete = self.youtube_api.youtube_captions_list(part="snippet", video_id=video_id)
-        self.assertFalse(any(item["id"] == new_caption_id for item in list_result_after_delete["items"]))
-
-    def test_video_rating_and_retrieval(self):
-        """
-        Combined test: Rate a video and then retrieve its rating.
-        Note: Dummy backend always returns 'none' for get_rating.
-        """
-        video_id = "videoDEF" # Use a different video
+    def test_delete_video(self):
+        """Test deleting a video."""
+        self.youtube_api.authenticate(self.alice_token)
+        # First upload a video
+        upload_result = self.youtube_api.upload_video(title="Video to Delete")
+        video_id = upload_result["id"]
         
-        # 1. Rate the video as 'like'
-        rate_result_like = self.youtube_api.youtube_videos_rate(id=video_id, rating="like")
-        self.assertTrue(rate_result_like["success"])
-        self.assertEqual(rate_result_like["rating"], "like")
+        # Delete it (should not raise exception)
+        self.youtube_api.delete_video(video_id)
 
-        # 2. Retrieve the rating (will still be 'none' due to dummy backend)
-        get_rating_result_like = self.youtube_api.youtube_videos_get_rating(id=video_id)
-        self.assertIn("items", get_rating_result_like)
-        self.assertEqual(get_rating_result_like["items"][0]["rating"], "none")
+    def test_delete_video_not_owner(self):
+        """Test deleting video as non-owner fails."""
+        self.youtube_api.authenticate(self.alice_token)
+        upload_result = self.youtube_api.upload_video(title="Alice's Video")
+        video_id = upload_result["id"]
+        
+        # Try to delete as Bob
+        self.youtube_api.authenticate(self.bob_token)
+        with self.assertRaises(Exception) as context:
+            self.youtube_api.delete_video(video_id)
+        self.assertIn("only the video owner", str(context.exception).lower())
 
-        # 3. Rate the video as 'dislike'
-        rate_result_dislike = self.youtube_api.youtube_videos_rate(id=video_id, rating="dislike")
-        self.assertTrue(rate_result_dislike["success"])
-        self.assertEqual(rate_result_dislike["rating"], "dislike")
+    # --- Video Rating Tests ---
+    def test_rate_video_like(self):
+        """Test liking a video."""
+        self.youtube_api.authenticate(self.alice_token)
+        # Should not raise exception
+        self.youtube_api.rate_video(self.REAL_VIDEO_ID, "like")
 
-        # 4. Retrieve the rating again (will still be 'none' due to dummy backend)
-        get_rating_result_dislike = self.youtube_api.youtube_videos_get_rating(id=video_id)
-        self.assertIn("items", get_rating_result_dislike)
-        self.assertEqual(get_rating_result_dislike["items"][0]["rating"], "none")
+    def test_rate_video_remove_like(self):
+        """Test removing a like from a video."""
+        self.youtube_api.authenticate(self.alice_token)
+        self.youtube_api.rate_video(self.REAL_VIDEO_ID, "like")
+        # Remove like
+        self.youtube_api.rate_video(self.REAL_VIDEO_ID, "none")
 
-    def test_comment_thread_creation_and_reply(self):
-        """
-        Combined test: Create a comment thread and then add a reply to it.
-        """
-        self.youtube_api.current_channel = "channel1@example.com"
-        video_id = "videoABC"
-        initial_thread_count = len(self.youtube_api.comment_threads)
-        initial_comment_count = len(self.youtube_api.comments)
+    def test_rate_video_invalid_rating(self):
+        """Test rating video with invalid rating."""
+        self.youtube_api.authenticate(self.alice_token)
+        with self.assertRaises(Exception) as context:
+            self.youtube_api.rate_video(self.REAL_VIDEO_ID, "dislike")
+        self.assertIn("Invalid rating", str(context.exception))
 
-        # 1. Create a new comment thread
-        thread_text = "What are your thoughts on this video?"
-        create_thread_result = self.youtube_api.youtube_comment_threads_insert(
-            part="snippet",
-            video_id=video_id,
-            text_original=thread_text
+    # --- Subscription Tests ---
+    def test_list_my_subscriptions(self):
+        """Test listing authenticated user's subscriptions."""
+        self.youtube_api.authenticate(self.alice_token)
+        result = self.youtube_api.list_my_subscriptions()
+        self.assertIn("kind", result)
+        self.assertEqual(result["kind"], "youtube#subscriptionListResponse")
+        self.assertIn("items", result)
+        self.assertIn("pageInfo", result)
+
+    def test_subscribe(self):
+        """Test subscribing to a channel."""
+        self.youtube_api.authenticate(self.alice_token)
+        result = self.youtube_api.subscribe(self.REAL_CHANNEL_ID)
+        self.assertIn("kind", result)
+        self.assertEqual(result["kind"], "youtube#subscription")
+        self.assertIn("snippet", result)
+
+    def test_subscribe_non_existent_channel(self):
+        """Test subscribing to non-existent channel."""
+        self.youtube_api.authenticate(self.alice_token)
+        with self.assertRaises(Exception) as context:
+            self.youtube_api.subscribe("nonexistent_channel")
+        self.assertIn("Channel not found", str(context.exception))
+
+    def test_unsubscribe(self):
+        """Test unsubscribing from a channel."""
+        self.youtube_api.authenticate(self.alice_token)
+        # Subscribe first
+        self.youtube_api.subscribe(self.REAL_CHANNEL_ID)
+        # Unsubscribe (should not raise exception)
+        self.youtube_api.unsubscribe(self.REAL_CHANNEL_ID)
+
+    def test_unsubscribe_not_subscribed(self):
+        """Test unsubscribing from channel not subscribed to."""
+        self.youtube_api.authenticate(self.bob_token)
+        with self.assertRaises(Exception) as context:
+            self.youtube_api.unsubscribe(self.REAL_CHANNEL_ID)
+        self.assertIn("not subscribed", str(context.exception).lower())
+
+    # --- Search Tests ---
+    def test_search_videos(self):
+        """Test searching for videos."""
+        result = self.youtube_api.search_videos(query="test")
+        self.assertIn("kind", result)
+        self.assertEqual(result["kind"], "youtube#searchListResponse")
+        self.assertIn("items", result)
+        self.assertIn("pageInfo", result)
+
+    def test_search_videos_with_max_results(self):
+        """Test searching with maxResults."""
+        result = self.youtube_api.search_videos(query="music", maxResults=5)
+        self.assertIn("pageInfo", result)
+        self.assertEqual(result["pageInfo"]["resultsPerPage"], 5)
+
+    def test_search_videos_empty_query(self):
+        """Test searching with empty query."""
+        with self.assertRaises(Exception) as context:
+            self.youtube_api.search_videos(query="")
+        self.assertIn("Query parameter is required", str(context.exception))
+
+    # --- Playlist Tests ---
+    def test_list_playlists_in_channel(self):
+        """Test listing playlists in a channel."""
+        result = self.youtube_api.list_playlists_in_channel(self.REAL_CHANNEL_ID)
+        self.assertIn("kind", result)
+        self.assertEqual(result["kind"], "youtube#playlistListResponse")
+        self.assertIn("items", result)
+
+    def test_get_playlist_details(self):
+        """Test getting playlist details."""
+        result = self.youtube_api.get_playlist_details(self.REAL_PLAYLIST_ID)
+        self.assertIn("kind", result)
+        self.assertEqual(result["kind"], "youtube#playlist")
+        self.assertIn("snippet", result)
+        self.assertIn("items", result)
+
+    def test_get_playlist_non_existent(self):
+        """Test getting non-existent playlist."""
+        with self.assertRaises(Exception) as context:
+            self.youtube_api.get_playlist_details("nonexistent_playlist")
+        self.assertIn("Playlist not found", str(context.exception))
+
+    def test_create_playlist(self):
+        """Test creating a playlist."""
+        self.youtube_api.authenticate(self.alice_token)
+        result = self.youtube_api.create_playlist(
+            title="Test Playlist",
+            description="Test Description",
+            privacy_status="private"
         )
-        self.assertTrue(create_thread_result["success"])
-        new_thread_id = create_thread_result["thread_id"]
-        self.assertEqual(len(self.youtube_api.comment_threads), initial_thread_count + 1)
-        self.assertEqual(self.youtube_api.comment_threads[new_thread_id]["text_original"], thread_text)
+        self.assertIn("kind", result)
+        self.assertEqual(result["kind"], "youtube#playlist")
+        self.assertIn("id", result)
+        self.assertEqual(result["snippet"]["title"], "Test Playlist")
 
-        # 2. Add a reply to the newly created thread
-        reply_text = "I think it's great!"
-        create_reply_result = self.youtube_api.youtube_comments_insert(
-            part="snippet",
-            parent_id=new_thread_id,
-            text_original=reply_text
+    def test_add_video_to_playlist(self):
+        """Test adding video to playlist."""
+        self.youtube_api.authenticate(self.alice_token)
+        # Create a playlist
+        playlist_result = self.youtube_api.create_playlist(title="Test Playlist")
+        playlist_id = playlist_result["id"]
+        
+        # Add video
+        result = self.youtube_api.add_video_to_playlist(playlist_id, self.REAL_VIDEO_ID)
+        self.assertIn("kind", result)
+        self.assertEqual(result["kind"], "youtube#playlistItem")
+
+    def test_add_video_to_playlist_not_owner(self):
+        """Test adding video to playlist as non-owner fails."""
+        # Create a playlist as Alice
+        self.youtube_api.authenticate(self.alice_token)
+        playlist_result = self.youtube_api.create_playlist(title="Alice's Playlist")
+        alice_playlist_id = playlist_result["id"]
+        
+        # Try to add video as Bob (should fail)
+        self.youtube_api.authenticate(self.bob_token)
+        with self.assertRaises(Exception) as context:
+            self.youtube_api.add_video_to_playlist(alice_playlist_id, self.REAL_VIDEO_ID)
+        self.assertIn("only the playlist owner", str(context.exception).lower())
+
+    def test_remove_video_from_playlist(self):
+        """Test removing video from playlist."""
+        self.youtube_api.authenticate(self.alice_token)
+        # Create playlist and add video
+        playlist_result = self.youtube_api.create_playlist(title="Test Playlist")
+        playlist_id = playlist_result["id"]
+        self.youtube_api.add_video_to_playlist(playlist_id, self.REAL_VIDEO_ID)
+        
+        # Remove video (should not raise exception)
+        self.youtube_api.remove_video_from_playlist(playlist_id, self.REAL_VIDEO_ID)
+
+    # --- Comment Tests ---
+    def test_add_comment_to_video(self):
+        """Test adding a comment to a video."""
+        self.youtube_api.authenticate(self.alice_token)
+        result = self.youtube_api.add_comment_to_video(
+            self.REAL_VIDEO_ID,
+            "Great video!"
         )
-        self.assertTrue(create_reply_result["success"])
-        new_reply_id = create_reply_result["comment_id"]
-        self.assertEqual(len(self.youtube_api.comments), initial_comment_count + 1)
-        self.assertEqual(self.youtube_api.comments[new_reply_id]["text_original"], reply_text)
-        self.assertIn(new_reply_id, self.youtube_api.comment_threads[new_thread_id]["replies"])
+        self.assertIn("kind", result)
+        self.assertEqual(result["kind"], "youtube#comment")
+        self.assertIn("snippet", result)
+        self.assertEqual(result["snippet"]["textDisplay"], "Great video!")
 
-        # 3. List comment threads and verify the reply count
-        list_threads_result = self.youtube_api.youtube_comment_threads_list(
-            part="snippet,replies",
-            video_id=video_id,
-            id=new_thread_id
+    def test_add_comment_empty_text(self):
+        """Test adding comment with empty text."""
+        self.youtube_api.authenticate(self.alice_token)
+        with self.assertRaises(Exception) as context:
+            self.youtube_api.add_comment_to_video(self.REAL_VIDEO_ID, "")
+        self.assertIn("Comment text cannot be empty", str(context.exception))
+
+    def test_list_comments_for_video(self):
+        """Test listing comments for a video."""
+        result = self.youtube_api.list_comments_for_video(self.REAL_VIDEO_ID)
+        self.assertIn("kind", result)
+        self.assertEqual(result["kind"], "youtube#commentThreadListResponse")
+        self.assertIn("items", result)
+        self.assertIn("pageInfo", result)
+
+    def test_list_comments_with_pagination(self):
+        """Test listing comments with pagination."""
+        result = self.youtube_api.list_comments_for_video(
+            self.REAL_VIDEO_ID,
+            maxResults=10
         )
-        self.assertEqual(len(list_threads_result["items"]), 1)
-        retrieved_thread = list_threads_result["items"][0]
-        self.assertEqual(retrieved_thread["snippet"]["totalReplyCount"], 1)
-        self.assertEqual(retrieved_thread["replies"]["comments"][0]["id"], new_reply_id)
+        self.assertIn("pageInfo", result)
+        self.assertEqual(result["pageInfo"]["resultsPerPage"], 10)
 
-        # 4. Delete the thread (should also delete the reply in this dummy implementation)
-        delete_thread_result = self.youtube_api.youtube_comments_delete(id=new_thread_id)
-        self.assertTrue(delete_thread_result["success"])
-        self.assertNotIn(new_thread_id, self.youtube_api.comment_threads)
-        self.assertNotIn(new_reply_id, self.youtube_api.comments) # Verify reply is also gone
+    def test_delete_comment(self):
+        """Test deleting a comment."""
+        self.youtube_api.authenticate(self.alice_token)
+        # Add a comment
+        comment_result = self.youtube_api.add_comment_to_video(
+            self.REAL_VIDEO_ID,
+            "Comment to delete"
+        )
+        comment_id = comment_result["id"]
+        
+        # Delete it (should not raise exception)
+        self.youtube_api.delete_comment(comment_id)
 
-if __name__ == '__main__':
-    unittest.main(argv=['first-arg-is-ignored'], exit=False)
+    # --- Helper Method Tests (Legacy endpoints) ---
+    def test_get_user_by_email(self):
+        """Test getting user by email (legacy helper method)."""
+        result = self.youtube_api.get_user_by_email(self.REAL_EMAIL_ALICE)
+        self.assertIn("data", result)
+        self.assertIsNotNone(result["data"])
+
+    def test_get_user_by_display_name(self):
+        """Test getting user by display name (legacy helper method)."""
+        result = self.youtube_api.get_user_by_display_name("Alice")
+        self.assertIn("data", result)
+
+    def test_get_watch_later_playlist(self):
+        """Test getting watch later playlist (legacy helper method)."""
+        result = self.youtube_api.get_watch_later_playlist(self.REAL_USER_ID_ALICE)
+        self.assertIn("data", result)
+
+    def test_add_to_watch_later(self):
+        """Test adding to watch later (legacy helper method)."""
+        result = self.youtube_api.add_to_watch_later(
+            self.REAL_USER_ID_ALICE,
+            self.REAL_VIDEO_ID
+        )
+        self.assertTrue(result.get("status", False))
+
+    def test_get_notification_settings(self):
+        """Test getting notification settings (legacy helper method)."""
+        result = self.youtube_api.get_notification_settings(self.REAL_USER_ID_ALICE)
+        self.assertIn("data", result)
+
+    def test_update_notification_settings(self):
+        """Test updating notification settings (legacy helper method)."""
+        settings = {"email_notifications": True}
+        result = self.youtube_api.update_notification_settings(
+            self.REAL_USER_ID_ALICE,
+            settings
+        )
+        self.assertTrue(result.get("status", False))
+
+    # --- Caption Tests ---
+    def test_youtube_captions_insert(self):
+        """Test inserting captions (legacy method)."""
+        result = self.youtube_api.youtube_captions_insert(
+            self.REAL_VIDEO_ID,
+            "en",
+            "Test caption content"
+        )
+        self.assertTrue(result.get("status", False))
+
+    # --- Reset Data Tests ---
+    def test_reset_data(self):
+        """Test resetting data clears authentication."""
+        self.youtube_api.authenticate(self.alice_token)
+        self.assertIsNotNone(self.youtube_api.access_token)
+        
+        # Reset
+        self.youtube_api.reset_data()
+        
+        # Should be cleared
+        self.assertIsNone(self.youtube_api.access_token)
+        self.assertIsNone(self.youtube_api.current_user_id)
+
+    # --- Integration Workflow Tests ---
+    def test_video_upload_workflow(self):
+        """Test complete video upload and interaction workflow."""
+        self.youtube_api.authenticate(self.alice_token)
+        
+        # Upload video
+        upload_result = self.youtube_api.upload_video(
+            title="Workflow Test Video",
+            description="Testing workflow",
+            tags=["test", "workflow"]
+        )
+        self.assertIn("id", upload_result)
+        video_id = upload_result["id"]
+        
+        # Get video details (public)
+        video = self.youtube_api.get_video(video_id)
+        self.assertEqual(video["snippet"]["title"], "Workflow Test Video")
+        
+        # Rate video
+        self.youtube_api.rate_video(video_id, "like")
+        
+        # Add comment
+        comment = self.youtube_api.add_comment_to_video(video_id, "Great video!")
+        self.assertIn("id", comment)
+        
+        # List comments
+        comments = self.youtube_api.list_comments_for_video(video_id)
+        self.assertGreater(len(comments["items"]), 0)
+
+    def test_playlist_workflow(self):
+        """Test complete playlist management workflow."""
+        self.youtube_api.authenticate(self.alice_token)
+        
+        # Create playlist
+        playlist = self.youtube_api.create_playlist(
+            title="Workflow Playlist",
+            description="Testing playlist workflow"
+        )
+        playlist_id = playlist["id"]
+        
+        # Add video to playlist
+        item = self.youtube_api.add_video_to_playlist(playlist_id, self.REAL_VIDEO_ID)
+        self.assertIn("kind", item)
+        
+        # Get playlist details
+        details = self.youtube_api.get_playlist_details(playlist_id)
+        self.assertGreater(len(details["items"]), 0)
+        
+        # Remove video from playlist
+        self.youtube_api.remove_video_from_playlist(playlist_id, self.REAL_VIDEO_ID)
+
+    def test_channel_subscription_workflow(self):
+        """Test channel subscription workflow."""
+        self.youtube_api.authenticate(self.bob_token)
+        
+        # Subscribe to channel
+        subscription = self.youtube_api.subscribe(self.REAL_CHANNEL_ID)
+        self.assertIn("kind", subscription)
+        
+        # List subscriptions
+        subs = self.youtube_api.list_my_subscriptions()
+        self.assertGreater(len(subs["items"]), 0)
+        
+        # Unsubscribe
+        self.youtube_api.unsubscribe(self.REAL_CHANNEL_ID)
+
+if __name__ == "__main__":
+    unittest.main()

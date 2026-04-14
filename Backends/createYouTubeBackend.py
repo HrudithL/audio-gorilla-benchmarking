@@ -4,7 +4,7 @@ import json
 import uuid
 import random
 from typing import Dict, Any
-from fake_data import first_names, last_names, channel_bios, comment_texts, youtube_titles, domains, youtube_comments, youtube_video_descriptions, countries, first_and_last_names, user_count
+from fake_data import first_names, last_names, youtube_comments, youtube_titles, domains, youtube_comments, youtube_video_descriptions, countries, first_and_last_names, user_count, channel_names, channel_bios, channel_categories
 
 _initial_user_id_map = {}
 _initial_channel_id_map = {}
@@ -49,7 +49,7 @@ def _convert_initial_data_to_uuids(initial_data: Dict[str, Any]) -> Dict[str, An
         if "joined_date" not in user_data:
             user_data["joined_date"] = current_time_iso
         elif not isinstance(user_data["joined_date"], str):
-             user_data["joined_date"] = user_data["joined_date"].isoformat(timespec='milliseconds') + "Z"
+            user_data["joined_date"] = user_data["joined_date"].isoformat(timespec='milliseconds') + "Z"
         new_users[user_uuid] = user_data
     converted_data["users"] = new_users
 
@@ -119,8 +119,12 @@ def _convert_initial_data_to_uuids(initial_data: Dict[str, Any]) -> Dict[str, An
 
         
         if "comments" in video_data:
-            video_data["comments_temp"] = video_data["comments"]
-            video_data["comments"] = [] 
+            # comments is now a dict {user_id: comment_text}, convert user_ids to UUIDs
+            video_data["comments_temp"] = {}
+            for user_id, comment_text in video_data["comments"].items():
+                new_user_id = _initial_user_id_map.get(user_id, user_id)
+                video_data["comments_temp"][new_user_id] = comment_text
+            video_data["comments"] = {}
 
         new_videos[video_uuid] = video_data
     converted_data["videos"] = new_videos
@@ -234,12 +238,12 @@ def _convert_initial_data_to_uuids(initial_data: Dict[str, Any]) -> Dict[str, An
     
     for video_uuid, video_data in new_videos.items():
         if "comments_temp" in video_data:
-            video_data["comments"] = [
-                _initial_comment_id_map.get(c_id, c_id) for c_id in video_data.pop("comments_temp")
-            ]
-            video_data["comments"] = [
-                c_id for c_id in video_data["comments"] if c_id in new_comments
-            ]
+            # comments_temp is {user_id: comment_text}, filter valid user_ids
+            comments_dict = video_data.pop("comments_temp")
+            video_data["comments"] = {
+                user_id: comment_text for user_id, comment_text in comments_dict.items()
+                if user_id in new_users
+            }
         if "liked_by_temp" in video_data:
             video_data["liked_by"] = [
                 _initial_user_id_map.get(u_id, u_id) for u_id in video_data.pop("liked_by_temp")
@@ -270,24 +274,28 @@ def generate_random_iso_timestamp(days_ago_min=0, days_ago_max=365*5):
     dt = datetime.datetime.now(datetime.timezone.utc) - time_offset
     return dt.isoformat(timespec='milliseconds').replace('+00:00', 'Z')
 
-channel_niches = [
-    {"title_suffix": "Gaming", "description": "Gaming tutorials, let's plays, and reviews.", "tags": ["gaming", "esports", "walkthrough"]},
-    {"title_suffix": "Cooking", "description": "Delicious recipes and culinary adventures.", "tags": ["food", "recipe", "cooking"]},
-    {"title_suffix": "Travel", "description": "Exploring amazing destinations around the world.", "tags": ["travel", "vlog", "adventure"]},
-    {"title_suffix": "Tech Reviews", "description": "In-depth reviews of the latest gadgets and software.", "tags": ["tech", "review", "gadgets"]},
-    {"title_suffix": "Fitness Journey", "description": "Workout routines, healthy eating, and wellness tips.", "tags": ["fitness", "health", "workout"]},
-    {"title_suffix": "DIY Crafts", "description": "Creative DIY projects and craft ideas.", "tags": ["DIY", "crafts", "handmade"]},
-    {"title_suffix": "Study Tips", "description": "Effective study techniques and academic advice.", "tags": ["education", "study", "learning"]},
-    {"title_suffix": "Music Covers", "description": "Covering popular songs and original music.", "tags": ["music", "covers", "songwriting"]},
-    {"title_suffix": "Coding Tutorials", "description": "Learn to code with easy-to-follow tutorials.", "tags": ["programming", "coding", "tutorial"]},
-    {"title_suffix": "Art Showcase", "description": "Showcasing digital and traditional artwork.", "tags": ["art", "drawing", "painting"]},
-    {"title_suffix": "Personal Finance", "description": "Tips for budgeting, investing, and financial freedom.", "tags": ["finance", "money", "investing"]},
-    {"title_suffix": "Nature & Wildlife", "description": "Documenting the beauty of nature and its inhabitants.", "tags": ["nature", "wildlife", "documentary"]},
-    {"title_suffix": "Book Reviews", "description": "Discussing new releases and classic literature.", "tags": ["books", "reading", "literature"]},
-    {"title_suffix": "Science Explained", "description": "Making complex scientific concepts easy to understand.", "tags": ["science", "education", "discovery"]},
-    {"title_suffix": "Comedy Skits", "description": "Short, funny skits and relatable humor.", "tags": ["comedy", "skits", "funny"]},
-    {"title_suffix": "Fashion & Style", "description": "Latest trends, fashion hauls, and styling tips.", "tags": ["fashion", "style", "beauty"]}
-]
+# Track which channel names and videos have been used
+used_channel_indices = set()
+used_video_titles = {category: set() for category in set(channel_categories.values())}
+
+# Category to tag mapping
+category_tags = {
+    "Gaming": ["gaming", "esports", "walkthrough", "gameplay"],
+    "Vlogging": ["vlog", "daily", "lifestyle", "travel"],
+    "How-To & DIY": ["DIY", "tutorial", "howto", "crafts"],
+    "Educational Explainers": ["education", "learning", "explained", "science"],
+    "Product Reviews": ["review", "unboxing", "gadgets", "tech"],
+    "Documentaries": ["documentary", "history", "nature", "exploration"],
+    "Cooking & Recipes": ["cooking", "recipe", "food", "baking"],
+    "Commentary": ["commentary", "opinion", "discussion", "analysis"],
+    "Tech Reviews": ["tech", "review", "gadgets", "technology"],
+    "Health & Fitness": ["fitness", "health", "workout", "wellness"],
+    "ASMR": ["asmr", "relaxation", "sleep", "tingles"],
+    "Fashion Hauls": ["fashion", "haul", "style", "beauty"],
+    "Food Reviews": ["food", "review", "restaurant", "tasting"],
+    "Comedy Skits": ["comedy", "skits", "funny", "humor"],
+    "Beauty Tutorials": ["beauty", "makeup", "tutorial", "skincare"]
+}
 
 RAW_DEFAULT_STATE = {
     "users": {
@@ -297,8 +305,6 @@ RAW_DEFAULT_STATE = {
     "videos": {
     },
     "playlists": {
-    },
-    "comments": {
     }
 }
 
@@ -347,36 +353,55 @@ for i in range(len(first_and_last_names) + user_count):
 
 all_channel_uuids = list(DEFAULT_STATE["channels"].keys())
 
-for user_id in all_user_uuids:
+# Create channels using channel_names, channel_bios, and channel_categories
+# Create one channel per channel name until the list is exhausted
+available_user_ids = [uid for uid in all_user_uuids if not DEFAULT_STATE["users"][uid]["channels"]]
+
+for i in range(len(channel_names)):
+    if not available_user_ids:
+        # If we run out of users without channels, allow users to have multiple channels
+        available_user_ids = list(all_user_uuids)
+    
+    # For the first 2 channels, assign to the first 2 users (Alice and Bob for tests)
+    if i < 2 and i < len(all_user_uuids):
+        user_id = all_user_uuids[i]
+    else:
+        # Select a random user to own this channel
+        user_id = random.choice(available_user_ids)
+    
     user_data = DEFAULT_STATE["users"][user_id]
     
+    channel_id = str(uuid.uuid4())
+    title = channel_names[i]
+    description = channel_bios[i]
+    category = channel_categories[title]
     
-    if not user_data["channels"] and random.random() < 0.8: 
-        channel_id = str(uuid.uuid4())
-        niche = random.choice(channel_niches)
-        title = f"{user_data['display_name'].split()[0]}'s {niche['title_suffix']}"
-        description = niche["description"]
-        
-        new_channel_data = {
-            "id": channel_id,
-            "title": title,
-            "description": description,
-            "owner_id": user_id,
-            "created_at": generate_random_iso_timestamp(days_ago_min=30, days_ago_max=730), 
-            "subscribers": [], 
-            "videos": [], 
-            "playlists": [], 
-            "country": random.choice(countries),
-            "view_count": random.randint(100, 1000000),
-            "subscriber_count": random.randint(0, 50000),
-            "video_count": 0, 
-            "banner_image_path": f"https://youtube.com/channel_banners/{channel_id}.jpg",
-            "channel_type": niche["title_suffix"].lower().replace(' ', '_'),
-            "is_monetized": random.random() < 0.3 
-        }
-        DEFAULT_STATE["channels"][channel_id] = new_channel_data
-        user_data["channels"].append(channel_id)
-        all_channel_uuids.append(channel_id)
+    new_channel_data = {
+        "id": channel_id,
+        "title": title,
+        "description": description,
+        "owner_id": user_id,
+        "created_at": generate_random_iso_timestamp(days_ago_min=30, days_ago_max=730),
+        "subscribers": [],
+        "videos": [],
+        "playlists": [],
+        "country": random.choice(countries),
+        "view_count": random.randint(100, 1000000),
+        "subscriber_count": random.randint(0, 50000),
+        "video_count": 0,
+        "banner_image_path": f"https://youtube.com/channel_banners/{channel_id}.jpg",
+        "channel_type": category.lower().replace(' ', '_').replace('&', 'and'),
+        "is_monetized": random.random() < 0.3,
+        "category": category
+    }
+    DEFAULT_STATE["channels"][channel_id] = new_channel_data
+    user_data["channels"].append(channel_id)
+    all_channel_uuids.append(channel_id)
+    used_channel_indices.add(i)
+    
+    # Remove user from available list if we want to limit to one channel per user initially
+    if user_id in available_user_ids:
+        available_user_ids.remove(user_id)
 
 
 for user_id in all_user_uuids:
@@ -396,60 +421,98 @@ for user_id in all_user_uuids:
                 DEFAULT_STATE["channels"][sub_channel_id]["subscriber_count"] += 1
 
 all_video_uuids = list(DEFAULT_STATE["videos"].keys())
+all_comment_uuids = list(DEFAULT_STATE["comments"].keys())
 
 for channel_id, channel_data in DEFAULT_STATE["channels"].items():
     owner_id = channel_data["owner_id"]
-    num_videos_to_add = random.randint(1, 5) 
+    channel_category = channel_data.get("category", "Educational Explainers")
+    num_videos_to_add = random.randint(1, 5)
 
     for i in range(num_videos_to_add):
-        
         video_uuid = str(uuid.uuid4())
         
-        # Keep trying until we find a valid title
+        # Try to find a video title from the channel's category
         title = None
-        while title is None:
-            random_video_category = random.choice(list(youtube_titles.keys()))
-            if youtube_titles[random_video_category]:
-                title = random.choice(youtube_titles[random_video_category])
-                index_for_title = youtube_titles[random_video_category].index(title)
-                youtube_titles[random_video_category].remove(title)
-                description_template = youtube_video_descriptions[random_video_category][index_for_title]
-                youtube_video_descriptions[random_video_category].remove(description_template)
-                comments_for_video = random.sample(youtube_comments[random_video_category], random.randint(0, 5))
-            else:
-                # If this category is empty, continue to try another category
-                continue
+        description_template = None
+        video_category = None
+        
+        # First try to get videos matching the channel's category
+        if channel_category in youtube_titles and youtube_titles[channel_category]:
+            # Get unused titles from this category
+            available_titles = [t for t in youtube_titles[channel_category] if t not in used_video_titles[channel_category]]
+            if available_titles:
+                title = random.choice(available_titles)
+                index_for_title = youtube_titles[channel_category].index(title)
+                description_template = youtube_video_descriptions[channel_category][index_for_title]
+                video_category = channel_category
+                used_video_titles[channel_category].add(title)
+        
+        # If no matching category videos, try any available category
+        if title is None:
+            available_categories = [cat for cat in youtube_titles.keys() if youtube_titles[cat]]
+            if available_categories:
+                for attempt_cat in available_categories:
+                    unused_titles = [t for t in youtube_titles[attempt_cat] if t not in used_video_titles.get(attempt_cat, set())]
+                    if unused_titles:
+                        title = random.choice(unused_titles)
+                        index_for_title = youtube_titles[attempt_cat].index(title)
+                        description_template = youtube_video_descriptions[attempt_cat][index_for_title]
+                        video_category = attempt_cat
+                        if attempt_cat not in used_video_titles:
+                            used_video_titles[attempt_cat] = set()
+                        used_video_titles[attempt_cat].add(title)
+                        break
+        
+        # If still no title found, skip this video
+        if title is None:
+            continue
+        
+        # Create comments as a dictionary {user_id: comment_text}
+        comments_for_video = {}
+        num_comments = random.randint(0, 5)
+        if num_comments > 0 and video_category in youtube_comments and youtube_comments[video_category]:
+            available_users = list(DEFAULT_STATE["users"].keys())
+            num_available_comments = min(num_comments, len(youtube_comments[video_category]))
+            if num_available_comments > 0:
+                selected_comments = random.sample(youtube_comments[video_category], num_available_comments)
+                selected_users = random.sample(available_users, num_available_comments)
+                comments_for_video = dict(zip(selected_users, selected_comments))
+        
+        # Get tags for this channel's category
+        channel_tags = category_tags.get(channel_category, ["video", "content", "youtube"])
+        tags = random.sample(channel_tags + ["new", "viral", "trending"], random.randint(2, 5))
+        
         video_data = {
             "id": video_uuid,
             "title": title,
             "description": description_template,
             "channel_id": channel_id,
             "uploader_id": owner_id,
-            "published_at": generate_random_iso_timestamp(days_ago_min=0, days_ago_max=730), 
-            "duration_seconds": random.randint(60, 1800), 
+            "published_at": generate_random_iso_timestamp(days_ago_min=0, days_ago_max=730),
+            "duration_seconds": random.randint(60, 1800),
             "views": random.randint(100, 500000),
             "likes": random.randint(0, 15000),
             "dislikes": random.randint(0, 500),
-            "comments": comments_for_video, 
-            "tags": random.sample(channel_niches[random.randint(0, len(channel_niches)-1)]["tags"] + ["new", "viral", "challenge"], random.randint(1, 4)),
-            "category": random_video_category, 
+            "comments": comments_for_video,
+            "tags": tags,
+            "category": video_category,
             "privacy_status": random.choice(["public", "unlisted", "private"]),
-            "age_restricted": random.random() < 0.05, 
-            "thumbnail_url": f"[https://youtube.com/thumbnails/](https://youtube.com/thumbnails/){video_uuid}.jpg",
-            "liked_by": [] 
+            "age_restricted": random.random() < 0.05,
+            "thumbnail_url": f"https://youtube.com/thumbnails/{video_uuid}.jpg",
+            "liked_by": []
         }
         DEFAULT_STATE["videos"][video_uuid] = video_data
         channel_data["videos"].append(video_uuid)
         channel_data["video_count"] += 1
         all_video_uuids.append(video_uuid)
 
-        
+        # Owner interactions with their own videos
         user_owner_data = DEFAULT_STATE["users"][owner_id]
-        if random.random() < 0.3: 
+        if random.random() < 0.3:
             video_data["liked_by"].append(owner_id)
             if video_uuid not in user_owner_data["liked_videos"]:
                 user_owner_data["liked_videos"].append(video_uuid)
-        if random.random() < 0.7: 
+        if random.random() < 0.7:
             if video_uuid not in user_owner_data["watch_history"]:
                 user_owner_data["watch_history"].append(video_uuid)
 
@@ -516,12 +579,12 @@ for user_id in all_user_uuids:
         DEFAULT_STATE["channels"][channel_for_playlist]["playlists"].append(playlist_uuid)
         all_playlist_uuids.append(playlist_uuid)
 
-all_comment_uuids = list(DEFAULT_STATE["comments"].keys())
-
 for video_id, video_data in DEFAULT_STATE["videos"].items():
     num_comments_to_add = random.choices([0, 1, 2, 3, 5, 10], weights=[0.4, 0.2, 0.15, 0.1, 0.1, 0.05], k=1)[0]
 
     possible_commenters = [uid for uid in all_user_uuids if uid != video_data["uploader_id"]] 
+    
+    video_category = video_data.get("category", "")
     
     for _ in range(num_comments_to_add):
         if not possible_commenters:
@@ -530,17 +593,15 @@ for video_id, video_data in DEFAULT_STATE["videos"].items():
         comment_uuid = str(uuid.uuid4())
         author_id = random.choice(possible_commenters)
         
-        comment_data = {
-            "id": comment_uuid,
-            "video_id": video_id,
-            "author_id": author_id,
-            "text": random.choice(comment_texts),
-            "created_at": generate_random_iso_timestamp(days_ago_min=0, days_ago_max=300), 
-            "likes": random.randint(0, 50)
-        }
-        DEFAULT_STATE["comments"][comment_uuid] = comment_data
-        video_data["comments"].append(comment_uuid)
-        all_comment_uuids.append(comment_uuid)
+        # Add comment directly to video's comments dictionary using the video's category
+        if video_category in youtube_comments and youtube_comments[video_category]:
+            video_data["comments"][author_id] = random.choice(youtube_comments[video_category])
+        else:
+            # Fallback to any available category if the video's category doesn't have comments
+            available_categories = [cat for cat in youtube_comments.keys() if youtube_comments[cat]]
+            if available_categories:
+                fallback_category = random.choice(available_categories)
+                video_data["comments"][author_id] = random.choice(youtube_comments[fallback_category])
 
 output_filename = 'diverse_youtube_state.json'
 with open(output_filename, 'w') as f:
@@ -550,5 +611,4 @@ print(f"Total number of users: {len(DEFAULT_STATE['users'])}")
 print(f"Total number of channels: {len(DEFAULT_STATE['channels'])}")
 print(f"Total number of videos: {len(DEFAULT_STATE['videos'])}")
 print(f"Total number of playlists: {len(DEFAULT_STATE['playlists'])}")
-print(f"Total number of comments: {len(DEFAULT_STATE['comments'])}")
 print(f"Generated DEFAULT_STATE saved to '{output_filename}'")

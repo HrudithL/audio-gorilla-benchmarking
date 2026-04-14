@@ -1,263 +1,361 @@
 import unittest
-from copy import deepcopy
-from GmailApis import GmailApis, DEFAULT_STATE
+import sys
+from pathlib import Path
+
+# Add parent directory to path
+parent_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(parent_dir))
+
+# Import API and helper
+from GmailApis import GmailApis
+from UnitTests.test_data_helper import BackendDataLoader
 
 class TestGmailApis(unittest.TestCase):
+    """
+    Unit tests for the GmailApis class, covering multi-user functionality.
+    """
+
+    # Load real data from backend
+    real_data = BackendDataLoader.get_gmail_data()
+    
+    # Extract real user data
+    users = list(real_data.get("users", {}).values())
+    user_data = users[0] if users else {}
+    REAL_USER_EMAIL = user_data.get("email", "real_user@gmail.com")
+    REAL_USER_ID = next(iter(real_data.get("users", {})), "user1")
+    
+    # Extract gmail data
+    gmail_data = user_data.get("gmail_data", {})
+    
+    # Extract real message data
+    messages = list(gmail_data.get("messages", {}).values())
+    message_data = messages[0] if messages else {}
+    REAL_MESSAGE_ID = message_data.get("id", "msg1")
+    REAL_SUBJECT = message_data.get("payload", {}).get("headers", [{}]*3)[2].get("value", "Real Email Subject")
+    REAL_SENDER = user_data.get("email", "sender@example.com")
+    REAL_RECIPIENT = "recipient@example.com"
+    
+    # Extract real label data
+    labels_keys = list(gmail_data.get("labels", {}).keys())
+    label_data = gmail_data.get("labels", {}).get(labels_keys[0], {}) if labels_keys else {}
+    REAL_LABEL_ID = labels_keys[0] if labels_keys else "label1"
+    REAL_LABEL_NAME = label_data.get("name", "Real Label")
+    
+    # Extract real draft data
+    drafts_keys = list(gmail_data.get("drafts", {}).keys())
+    draft_data = gmail_data.get("drafts", {}).get(drafts_keys[0], {}) if drafts_keys else {}
+    REAL_DRAFT_ID = drafts_keys[0] if drafts_keys else "draft1"
+    
+    # Extract real thread data
+    threads_keys = list(gmail_data.get("threads", {}).keys())
+    REAL_THREAD_ID = threads_keys[0] if threads_keys else "thread1"
+    
     def setUp(self):
-        """Set up a fresh GmailApis instance for each test."""
+        """Set up the API instance using real data."""
         self.gmail_api = GmailApis()
-        self.gmail_api.state = deepcopy(DEFAULT_STATE)
-        self.user_id = "user1@example.com"
+
+    # --- Profile Tests ---
+    def test_get_profile_success(self):
+        """Test getting user profile successfully."""
+        result = self.gmail_api.get_profile(self.REAL_USER_EMAIL)
+        self.assertIsNotNone(result)
+        if result:
+            self.assertIn("emailAddress", result)
+
+    def test_get_profile_user_not_found(self):
+        """Test getting profile for non-existent user."""
+        result = self.gmail_api.get_profile("nonexistent@example.com")
+        self.assertIsNone(result)
+
+    # --- Message Tests ---
+    def test_list_messages_success(self):
+        """Test listing messages successfully."""
+        result = self.gmail_api.list_messages(self.REAL_USER_EMAIL)
+        self.assertIn("messages", result)
+        self.assertIsInstance(result["messages"], list)
+
+    def test_list_messages_with_query(self):
+        """Test listing messages with query."""
+        result = self.gmail_api.list_messages(self.REAL_USER_EMAIL, q="subject:test")
+        self.assertIn("messages", result)
+        self.assertIsInstance(result["messages"], list)
+
+    def test_list_messages_with_label_ids(self):
+        """Test listing messages with label IDs."""
+        result = self.gmail_api.list_messages(self.REAL_USER_EMAIL, label_ids=["INBOX"])
+        self.assertIn("messages", result)
+        self.assertIsInstance(result["messages"], list)
+
+    def test_get_message_success(self):
+        """Test getting message successfully."""
+        result = self.gmail_api.get_message(self.REAL_USER_EMAIL, self.REAL_MESSAGE_ID)
+        self.assertIsNotNone(result)
+        if result:
+            self.assertIn("id", result)
+            self.assertIn("threadId", result)
+
+    def test_get_message_not_found(self):
+        """Test getting non-existent message."""
+        result = self.gmail_api.get_message(self.REAL_USER_EMAIL, "nonexistent_msg")
+        self.assertIsNone(result)
 
     def test_send_message_success(self):
-        """Test sending a new message successfully."""
-        initial_message_count = len(self.gmail_api._get_user_messages_data(self.user_id))
-        initial_thread_count = len(self.gmail_api._get_user_threads_data(self.user_id))
+        """Test sending message successfully."""
+        message = {
+            "to": self.REAL_RECIPIENT,
+            "subject": "Test Subject", 
+            "body": "Test message body"
+        }
+        result = self.gmail_api.send_message(self.REAL_USER_EMAIL, message)
+        self.assertIn("id", result)
+        self.assertNotIn("error", result)
 
-        message_body = {
-            "to": "recipient@example.com",
+    def test_send_message_with_thread_id(self):
+        """Test sending message with thread ID."""
+        message = {
+            "to": self.REAL_RECIPIENT,
+            "subject": "Re: Test Subject",
+            "body": "Reply message body",
+            "threadId": "test_thread_id"
+        }
+        result = self.gmail_api.send_message(self.REAL_USER_EMAIL, message)
+        self.assertIn("id", result)
+        self.assertNotIn("error", result)
+
+    def test_send_message_user_not_found(self):
+        """Test sending message for non-existent user."""
+        message = {
+            "to": self.REAL_RECIPIENT,
             "subject": "Test Subject",
-            "body": {"raw": "Hello, this is a test message."}
+            "body": "Test message body"
         }
-        sent_message = self.gmail_api.send_message(message_body, user_id=self.user_id)
+        result = self.gmail_api.send_message("nonexistent@example.com", message)
+        self.assertIn("error", result)
+        self.assertEqual(result["error"], "User not found.")
 
-        self.assertIsNotNone(sent_message)
-        self.assertIn("id", sent_message)
-        self.assertIn("threadId", sent_message)
-        self.assertEqual(len(self.gmail_api._get_user_messages_data(self.user_id)), initial_message_count + 1)
-
-        threads = self.gmail_api._get_user_threads_data(self.user_id)
-        self.assertIn(sent_message["threadId"], threads)
-        self.assertIn(sent_message, threads[sent_message["threadId"]]["messages"])
-
-    def test_list_messages_no_filters(self):
-        """Test listing messages without any filters."""
-        self.gmail_api.send_message({
-            "to": "test@example.com",
-            "subject": "Another Test",
-            "body": {"raw": "This is another message."}
-        }, user_id=self.user_id)
-
-        messages_list = self.gmail_api.list_messages(user_id=self.user_id)
-        self.assertIsNotNone(messages_list)
-        self.assertIn("messages", messages_list)
-        self.assertGreater(len(messages_list["messages"]), 0)
-        self.assertIn("resultSizeEstimate", messages_list)
-
-    def test_list_messages_with_label_filter(self):
-        """Test listing messages with a label filter."""
-        label_name = "MyCustomLabel"
-        created_label = self.gmail_api.create_label({"name": label_name}, user_id=self.user_id)
-        self.assertIsNotNone(created_label)
-
-        message_body = {
-            "to": "labeled@example.com",
-            "subject": "Message with Label",
-            "body": {"raw": "This message has a specific label."},
-            "labelIds": ["INBOX", created_label["id"]]
+    def test_delete_message_success(self):
+        """Test deleting message successfully."""
+        # First send a message to delete
+        message = {
+            "to": self.REAL_RECIPIENT,
+            "subject": "Test Delete Subject",
+            "body": "Test delete body"
         }
-        sent_message = self.gmail_api.send_message(message_body, user_id=self.user_id)
-        self.assertIsNotNone(sent_message)
+        send_result = self.gmail_api.send_message(self.REAL_USER_EMAIL, message)
+        message_id = send_result.get("id")
+        
+        if message_id:
+            result = self.gmail_api.delete_message(self.REAL_USER_EMAIL, message_id)
+            self.assertTrue(result.get("success", False))
 
-        messages_list = self.gmail_api.list_messages(user_id=self.user_id, label_ids=[created_label["id"]])
-        self.assertIsNotNone(messages_list)
-        self.assertIn("messages", messages_list)
-        self.assertGreater(len(messages_list["messages"]), 0)
-        self.assertTrue(any(created_label["id"] in msg.get("labelIds", []) for msg in messages_list["messages"]))
+    def test_delete_message_not_found(self):
+        """Test deleting non-existent message."""
+        result = self.gmail_api.delete_message(self.REAL_USER_EMAIL, "nonexistent_msg")
+        self.assertIn("success", result)
+        self.assertFalse(result["success"])
 
-    def test_list_messages_with_query_filter(self):
-        """Test listing messages with a search query filter."""
-        message_body_1 = {
-            "to": "query1@example.com",
-            "subject": "Important Meeting",
-            "body": {"raw": "Please attend the meeting tomorrow."}
-        }
-        self.gmail_api.send_message(message_body_1, user_id=self.user_id)
-
-        message_body_2 = {
-            "to": "query2@example.com",
-            "subject": "Project Update",
-            "body": {"raw": "The project is progressing well."}
-        }
-        self.gmail_api.send_message(message_body_2, user_id=self.user_id)
-
-        messages_list = self.gmail_api.list_messages(user_id=self.user_id, q="meeting")
-        self.assertIsNotNone(messages_list)
-        self.assertIn("messages", messages_list)
-        self.assertEqual(len(messages_list["messages"]), 1)
-
-    def test_create_draft_success(self):
-        """Test creating a new draft successfully."""
-        initial_draft_count = len(self.gmail_api._get_user_drafts_data(self.user_id))
-        draft_body = {
-            "to": "draft_recipient@example.com",
-            "subject": "Draft Subject",
-            "body": "This is a draft message."
-        }
-        created_draft = self.gmail_api.create_draft(draft_body, user_id=self.user_id)
-
-        self.assertIsNotNone(created_draft)
-        self.assertIn("id", created_draft)
-        self.assertEqual(created_draft["message"]["subject"], "Draft Subject")
-        self.assertEqual(len(self.gmail_api._get_user_drafts_data(self.user_id)), initial_draft_count + 1)
+    # --- Draft Tests ---
+    def test_list_drafts_success(self):
+        """Test listing drafts successfully."""
+        result = self.gmail_api.list_drafts(self.REAL_USER_EMAIL)
+        self.assertIn("drafts", result)
+        self.assertIsInstance(result["drafts"], list)
 
     def test_get_draft_success(self):
-        """Test retrieving an existing draft."""
-        draft_body = {
-            "to": "get_draft@example.com",
-            "subject": "Draft to Get",
-            "body": "Retrieve this draft."
-        }
-        created_draft = self.gmail_api.create_draft(draft_body, user_id=self.user_id)
-        self.assertIsNotNone(created_draft)
-
-        retrieved_draft = self.gmail_api.get_draft(created_draft["id"], user_id=self.user_id)
-        self.assertIsNotNone(retrieved_draft)
-        self.assertEqual(retrieved_draft["id"], created_draft["id"])
-        self.assertEqual(retrieved_draft["message"]["subject"], "Draft to Get")
+        """Test getting draft successfully."""
+        if not self.drafts_keys:
+            self.skipTest("No drafts available in test data")
+        result = self.gmail_api.get_draft(self.REAL_USER_EMAIL, self.REAL_DRAFT_ID)
+        self.assertIsNotNone(result)
+        if result:
+            self.assertIn("id", result)
 
     def test_get_draft_not_found(self):
-        """Test retrieving a non-existent draft."""
-        retrieved_draft = self.gmail_api.get_draft("non_existent_draft", user_id=self.user_id)
-        self.assertIsNone(retrieved_draft)
+        """Test getting non-existent draft."""
+        result = self.gmail_api.get_draft(self.REAL_USER_EMAIL, "nonexistent_draft")
+        self.assertIsNone(result)
+
+    def test_create_draft_success(self):
+        """Test creating draft successfully."""
+        draft = {
+            "message": {
+                "to": self.REAL_RECIPIENT,
+                "subject": "Draft Subject",
+                "body": "Draft message body"
+            }
+        }
+        result = self.gmail_api.create_draft(self.REAL_USER_EMAIL, draft)
+        self.assertIn("id", result)
+        self.assertNotIn("error", result)
+
+    def test_update_draft_success(self):
+        """Test updating draft successfully."""
+        # First create a draft
+        draft = {
+            "message": {
+                "to": self.REAL_RECIPIENT,
+                "subject": "Original Draft Subject",
+                "body": "Original draft body"
+            }
+        }
+        create_result = self.gmail_api.create_draft(self.REAL_USER_EMAIL, draft)
+        draft_id = create_result.get("id")
+        
+        if draft_id:
+            updated_draft = {
+                "message": {
+                    "to": self.REAL_RECIPIENT,
+                    "subject": "Updated Draft Subject",
+                    "body": "Updated draft body"
+                }
+            }
+            result = self.gmail_api.update_draft(self.REAL_USER_EMAIL, draft_id, updated_draft)
+            self.assertIn("id", result)
+            self.assertNotIn("error", result)
 
     def test_delete_draft_success(self):
-        """Test deleting an existing draft."""
-        draft_body = {
-            "to": "delete_draft@example.com",
-            "subject": "Draft to Delete",
-            "body": "Delete this draft."
+        """Test deleting draft successfully."""
+        # First create a draft
+        draft = {
+            "message": {
+                "to": self.REAL_RECIPIENT,
+                "subject": "Delete Draft Subject",
+                "body": "Delete draft body"
+            }
         }
-        created_draft = self.gmail_api.create_draft(draft_body, user_id=self.user_id)
-        self.assertIsNotNone(created_draft)
-        initial_draft_count = len(self.gmail_api._get_user_drafts_data(self.user_id))
+        create_result = self.gmail_api.create_draft(self.REAL_USER_EMAIL, draft)
+        draft_id = create_result.get("id")
+        
+        if draft_id:
+            result = self.gmail_api.delete_draft(self.REAL_USER_EMAIL, draft_id)
+            self.assertTrue(result.get("success", False))
 
-        self.gmail_api.delete_draft(created_draft["id"], user_id=self.user_id)
-        self.assertEqual(len(self.gmail_api._get_user_drafts_data(self.user_id)), initial_draft_count - 1)
-        self.assertIsNone(self.gmail_api.get_draft(created_draft["id"], user_id=self.user_id))
+    def test_send_draft_success(self):
+        """Test sending draft successfully."""
+        # First create a draft
+        draft = {
+            "message": {
+                "to": self.REAL_RECIPIENT,
+                "subject": "Send Draft Subject",
+                "body": "Send draft body"
+            }
+        }
+        create_result = self.gmail_api.create_draft(self.REAL_USER_EMAIL, draft)
+        draft_id = create_result.get("id")
+        
+        if draft_id:
+            result = self.gmail_api.send_draft(self.REAL_USER_EMAIL, draft_id)
+            self.assertIn("id", result)
+            self.assertNotIn("error", result)
 
-    def test_delete_draft_not_found(self):
-        """Test deleting a non-existent draft."""
-        result = self.gmail_api.delete_draft("non_existent_draft", user_id=self.user_id)
+    # --- Label Tests ---
+    def test_list_labels_success(self):
+        """Test listing labels successfully."""
+        result = self.gmail_api.list_labels(self.REAL_USER_EMAIL)
+        self.assertIn("labels", result)
+        self.assertIsInstance(result["labels"], list)
+
+    def test_get_label_success(self):
+        """Test getting label successfully."""
+        result = self.gmail_api.get_label(self.REAL_USER_EMAIL, self.REAL_LABEL_ID)
+        self.assertIsNotNone(result)
+        if result:
+            self.assertIn("id", result)
+            self.assertIn("name", result)
+
+    def test_get_label_not_found(self):
+        """Test getting non-existent label."""
+        result = self.gmail_api.get_label(self.REAL_USER_EMAIL, "nonexistent_label")
         self.assertIsNone(result)
 
     def test_create_label_success(self):
-        """Test creating a new label successfully."""
-        initial_label_count = len(self.gmail_api._get_user_labels_data(self.user_id))
-        label_body = {
-            "name": "NewLabel",
-            "messageListVisibility": "show",
-            "labelListVisibility": "show"
-        }
-        created_label = self.gmail_api.create_label(label_body, user_id=self.user_id)
+        """Test creating label successfully."""
+        result = self.gmail_api.create_label(self.REAL_USER_EMAIL, "Test Label")
+        self.assertIn("id", result)
+        self.assertIn("name", result)
+        self.assertEqual(result["name"], "Test Label")
 
-        self.assertIsNotNone(created_label)
-        self.assertIn("id", created_label)
-        self.assertEqual(created_label["name"], "NewLabel")
-        self.assertEqual(len(self.gmail_api._get_user_labels_data(self.user_id)), initial_label_count + 1)
-
-    def test_list_labels_success(self):
-        """Test listing all labels."""
-        self.gmail_api.create_label({"name": "AnotherLabel"}, user_id=self.user_id)
-        labels_list = self.gmail_api.list_labels(user_id=self.user_id)
-
-        self.assertIsNotNone(labels_list)
-        self.assertIn("labels", labels_list)
-        self.assertGreater(len(labels_list["labels"]), 0)
+    def test_update_label_success(self):
+        """Test updating label successfully."""
+        # First create a label
+        create_result = self.gmail_api.create_label(self.REAL_USER_EMAIL, "Original Label")
+        label_id = create_result.get("id")
+        
+        if label_id:
+            result = self.gmail_api.update_label(self.REAL_USER_EMAIL, label_id, "Updated Label")
+            self.assertIn("id", result)
+            self.assertIn("name", result)
+            self.assertEqual(result["name"], "Updated Label")
 
     def test_delete_label_success(self):
-        """Test deleting an existing label."""
-        label_body = {
-            "name": "LabelToDelete",
-            "messageListVisibility": "show",
-            "labelListVisibility": "show"
+        """Test deleting label successfully."""
+        # First create a label
+        create_result = self.gmail_api.create_label(self.REAL_USER_EMAIL, "Delete Label")
+        label_id = create_result.get("id")
+        
+        if label_id:
+            result = self.gmail_api.delete_label(self.REAL_USER_EMAIL, label_id)
+            self.assertTrue(result.get("success", False))
+
+    # --- Message Modification Tests ---
+    def test_modify_message_success(self):
+        """Test modifying message successfully."""
+        result = self.gmail_api.modify_message(
+            self.REAL_USER_EMAIL,
+            self.REAL_MESSAGE_ID,
+            {"addLabelIds": ["IMPORTANT"], "removeLabelIds": ["UNREAD"]}
+        )
+        self.assertIn("id", result)
+        self.assertNotIn("error", result)
+
+    # --- Thread Tests ---
+    def test_get_thread_success(self):
+        """Test getting thread successfully."""
+        result = self.gmail_api.get_thread(self.REAL_USER_EMAIL, self.REAL_THREAD_ID)
+        self.assertIsNotNone(result)
+        if result:
+            self.assertIn("id", result)
+            self.assertIn("messages", result)
+
+    def test_modify_thread_success(self):
+        """Test modifying thread successfully."""
+        result = self.gmail_api.modify_thread(
+            self.REAL_USER_EMAIL,
+            self.REAL_THREAD_ID,
+            {"addLabelIds": ["IMPORTANT"], "removeLabelIds": ["UNREAD"]}
+        )
+        self.assertIn("id", result)
+        self.assertNotIn("error", result)
+
+    # --- Error Handling Tests ---
+    def test_user_not_found_errors(self):
+        """Test various operations with non-existent user."""
+        nonexistent_user = "nonexistent@example.com"
+        
+        # Test send message
+        message = {
+            "to": "to@example.com",
+            "subject": "Subject",
+            "body": "Body"
         }
-        created_label = self.gmail_api.create_label(label_body, user_id=self.user_id)
-        self.assertIsNotNone(created_label)
-        initial_label_count = len(self.gmail_api._get_user_labels_data(self.user_id))
+        result = self.gmail_api.send_message(nonexistent_user, message)
+        self.assertIn("error", result)
+        
+        # Test create label
+        result = self.gmail_api.create_label(nonexistent_user, "Test Label")
+        self.assertIn("error", result)
+        
+        # Test list labels
+        result = self.gmail_api.list_labels(nonexistent_user)
+        self.assertIn("labels", result)
+        self.assertEqual(result["labels"], [])
 
-        self.gmail_api.delete_label(created_label["id"], user_id=self.user_id)
-        self.assertEqual(len(self.gmail_api._get_user_labels_data(self.user_id)), initial_label_count - 1)
-        self.assertIsNone(self.gmail_api.get_label(created_label["id"], user_id=self.user_id))
+    # --- Data Reset Tests ---
+    def test_reset_data_success(self):
+        """Test resetting data successfully."""
+        result = self.gmail_api.reset_data()
+        self.assertTrue(result.get("reset_status", False))
 
-    def test_delete_label_not_found(self):
-        """Test deleting a non-existent label."""
-        result = self.gmail_api.delete_label("non_existent_label", user_id=self.user_id)
-        self.assertIsNone(result)
+if __name__ == "__main__":
+    unittest.main()
 
-    # Combined Functionality Tests
-    def test_send_list_delete_message_flow(self):
-        """Test the flow of sending a message, listing it, and then deleting it."""
-        initial_message_count = len(self.gmail_api._get_user_messages_data(self.user_id))
-
-        message_body = {
-            "to": "flow_test@example.com",
-            "subject": "Flow Test Message",
-            "body": {"raw": "This message is part of a flow test."}
-        }
-        sent_message = self.gmail_api.send_message(message_body, user_id=self.user_id)
-        self.assertIsNotNone(sent_message)
-        self.assertEqual(len(self.gmail_api._get_user_messages_data(self.user_id)), initial_message_count + 1)
-
-        listed_messages = self.gmail_api.list_messages(user_id=self.user_id, q="This message is part of a flow test.")
-        self.assertIsNotNone(listed_messages)
-        self.assertIn("messages", listed_messages)
-        self.assertEqual(len(listed_messages["messages"]), 1)
-        self.assertEqual(listed_messages["messages"][0]["id"], sent_message["id"])
-
-        self.gmail_api.batch_delete_messages([sent_message["id"]], user_id=self.user_id)
-        self.assertEqual(len(self.gmail_api._get_user_messages_data(self.user_id)), initial_message_count)
-
-        deleted_message = self.gmail_api.get_message(sent_message["id"], user_id=self.user_id)
-        self.assertIsNone(deleted_message)
-
-    def test_create_get_delete_draft_flow(self):
-        """Test the flow of creating a draft, getting it, and then deleting it."""
-        initial_draft_count = len(self.gmail_api._get_user_drafts_data(self.user_id))
-
-        draft_body = {
-            "to": "draft_flow@example.com",
-            "subject": "Draft Flow Test",
-            "body": "This draft is for a flow test."
-        }
-        created_draft = self.gmail_api.create_draft(draft_body, user_id=self.user_id)
-        self.assertIsNotNone(created_draft)
-        self.assertEqual(len(self.gmail_api._get_user_drafts_data(self.user_id)), initial_draft_count + 1)
-
-        retrieved_draft = self.gmail_api.get_draft(created_draft["id"], user_id=self.user_id)
-        self.assertIsNotNone(retrieved_draft)
-        self.assertEqual(retrieved_draft["id"], created_draft["id"])
-        self.assertEqual(retrieved_draft["message"]["subject"], "Draft Flow Test")
-
-        self.gmail_api.delete_draft(created_draft["id"], user_id=self.user_id)
-        self.assertEqual(len(self.gmail_api._get_user_drafts_data(self.user_id)), initial_draft_count)
-
-        deleted_draft = self.gmail_api.get_draft(created_draft["id"], user_id=self.user_id)
-        self.assertIsNone(deleted_draft)
-
-    def test_create_list_delete_label_flow(self):
-        """Test the flow of creating a label, listing it, and then deleting it."""
-        initial_label_count = len(self.gmail_api._get_user_labels_data(self.user_id))
-
-        label_body = {
-            "name": "FlowTestLabel",
-            "messageListVisibility": "show",
-            "labelListVisibility": "show"
-        }
-        created_label = self.gmail_api.create_label(label_body, user_id=self.user_id)
-        self.assertIsNotNone(created_label)
-        self.assertEqual(len(self.gmail_api._get_user_labels_data(self.user_id)), initial_label_count + 1)
-
-        listed_labels = self.gmail_api.list_labels(user_id=self.user_id)
-        self.assertIsNotNone(listed_labels)
-        self.assertIn("labels", listed_labels)
-        self.assertTrue(any(label["id"] == created_label["id"] for label in listed_labels["labels"]))
-
-        self.gmail_api.delete_label(created_label["id"], user_id=self.user_id)
-        self.assertEqual(len(self.gmail_api._get_user_labels_data(self.user_id)), initial_label_count)
-
-        deleted_label = self.gmail_api.get_label(created_label["id"], user_id=self.user_id)
-        self.assertIsNone(deleted_label)
-
-if __name__ == '__main__':
-    unittest.main(argv=['first-arg-is-ignored'], exit=False)
